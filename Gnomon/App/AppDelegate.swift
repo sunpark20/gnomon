@@ -53,7 +53,7 @@ public final class GnomonAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        return true
+        true
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
