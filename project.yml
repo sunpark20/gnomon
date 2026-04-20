@@ -41,6 +41,7 @@ targets:
         INFOPLIST_KEY_NSMainStoryboardFile: ""
         COMBINE_HIDPI_IMAGES: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: YES
 
   GnomonTests:
     type: bundle.unit-test

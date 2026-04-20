@@ -38,7 +38,7 @@ GITHUB_REPO="sunpark20/gnomon"
 # ── Version ────────────────────────────────────────────────────────
 VERSION="${1:-}"
 if [ -z "$VERSION" ]; then
-    VERSION=$(grep 'MARKETING_VERSION' project.yml | head -1 | sed 's/.*: *"\?\([0-9.]*\)"\?/\1/')
+    VERSION=$(grep 'MARKETING_VERSION' project.yml | head -1 | sed -E 's/.*: *"?([0-9.]+)"?.*/\1/')
 fi
 echo -e "${YELLOW}Building Gnomon v${VERSION}${NC}"
 
