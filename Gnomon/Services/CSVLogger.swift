@@ -77,6 +77,10 @@ public actor CSVLogger {
     }
 
     public static func defaultLogURL() -> URL {
+        defaultLogDirectory().appendingPathComponent("log.csv", isDirectory: false)
+    }
+
+    public static func defaultLogDirectory() -> URL {
         let base = try? FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
@@ -86,7 +90,16 @@ public actor CSVLogger {
         let dir = base?.appendingPathComponent("Gnomon", isDirectory: true)
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("Gnomon", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("log.csv", isDirectory: false)
+        return dir
+    }
+
+    /// Writes a diagnostics header file (system.txt) that sits next to the
+    /// CSV. Called once per launch.
+    public func writeDiagnostics(_ info: SystemInfo) async throws {
+        let dir = fileURL.deletingLastPathComponent()
+        try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("system.txt")
+        try info.rendered().write(to: url, atomically: true, encoding: .utf8)
     }
 
     /// Ensures the log file exists with a header row.

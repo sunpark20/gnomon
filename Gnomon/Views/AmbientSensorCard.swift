@@ -17,7 +17,7 @@ struct AmbientSensorCard: View {
             HStack(spacing: 10) {
                 macBookBadge
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("MacBook Sensor")
+                    Text("Mac Sensor")
                         .font(.headline)
                         .foregroundStyle(Theme.textPrimary)
                     Text("내장 조도센서 (Ambient Light)")

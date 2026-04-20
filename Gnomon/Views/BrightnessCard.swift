@@ -81,7 +81,7 @@ struct BrightnessCard: View {
                 .font(.title3)
                 .foregroundStyle(Theme.textSecondary)
             if controller.autoEnabled, controller.targetBrightness != current {
-                Text("→ \(controller.targetBrightness) tgt")
+                Text("→ \(controller.targetBrightness)%")
                     .font(.callout)
                     .foregroundStyle(Theme.textSecondary)
                     .padding(.leading, 6)

@@ -85,9 +85,15 @@ public final class AutoLoopController {
             print("[AutoLoop] start: discovery failed: \(error.localizedDescription)")
         }
 
-        // Prune old log rows once at startup. Ignore errors — logging is non-critical.
+        // Prune old log rows + write system diagnostics once at startup.
+        // Ignore errors — logging is non-critical.
+        let displayNames = await (try? ddcClient.listDisplays())?.map {
+            "\($0.displayName) [\($0.uuid)]"
+        } ?? []
+        let info = SystemInfo.collect(activeDisplays: displayNames)
         Task.detached { [logger] in
             try? await logger.rotate()
+            try? await logger.writeDiagnostics(info)
         }
 
         nextSyncAt = Date().addingTimeInterval(syncInterval)
