@@ -1,63 +1,137 @@
 # 다음 세션 핸드오프
 
-> 작성: 2026-04-20
+> 작성: 2026-04-21
 > 이 문서는 새 Claude 세션이 컨텍스트 없이 바로 이어받을 수 있게 작성됨.
 
 ---
 
 ## TL;DR — 새 세션에서 바로 할 일
 
-**최우선 TODO**: 사용자에게 아래 테스트 요청하고, `log.csv`를 받아서 **"찔끔찔끔" 밝기 전환 현상의 원인**을 분석한다.
+**배포 목표 확정**: Mac App Store 포기. **Developer ID + Notarization**으로 자체 배포 (GitHub Releases / 본인 웹).
+Gnomon 같은 DDC 앱은 MAS 심사 통과한 전례가 없음 (Lunar, BetterDisplay, MonitorControl 전부 자체 배포). 결론 근거는 아래 "배포 전략" 섹션.
 
-1. 사용자에게 설명:
-   - 현재 sync interval을 30초 → **5초로 바꿔서** 테스트해달라고 요청
-   - Gnomon 설정 → Sync Options → Interval 필드에 `5` 입력
-2. 테스트 프로토콜 안내:
-   - 앱 실행 + 센서를 손으로 **완전히 가림** (1분 유지)
-   - 다시 열어서 30초 대기
-3. `~/Library/Application Support/Gnomon/log.csv` 마지막 20-30줄 받기
-4. 4개 칼럼 분석:
-   - `raw_lux` → macOS 센서 응답속도
-   - `ema_lux` → Gnomon 내부 smoothing 출력
-   - `target_brightness` → 곡선 계산 결과
-   - `sent_brightness` → 실제 DDC 명령값
-5. 병목 지점 찾아서 수정 제안
+**자체 배포 준비 로드맵** (작업 완료 순서대로):
+
+1. **Carbon hotkey 교체** (가장 쉬움, 0.5일)
+   - 현재 `NSEvent.addGlobalMonitorForEvents` → Accessibility 권한 요구
+   - Carbon `RegisterEventHotKey`로 교체 → **Accessibility 불필요**
+   - 참조: [soffes/HotKey](https://github.com/soffes/HotKey) / [sindresorhus/KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
+   - 수정 대상: `Gnomon/Services/HotkeyManager.swift` + `AccessibilityChecker.swift` 제거 가능성
+   - 주의 (macOS 15+): hotkey modifier에 Cmd 또는 Ctrl 하나는 필수
+
+2. **m1ddc 네이티브 포팅** (사용자 경험 최대 개선, 1~2일)
+   - 현재 `/opt/homebrew/bin/m1ddc` 외부 바이너리 의존 → 사용자가 `brew install m1ddc` 해야 함
+   - `IOAVService` (`IOAVServiceCreate` + `IOAVServiceWriteI2C`) 직접 호출로 교체
+   - MIT 라이선스 레퍼런스: [MonitorControl Arm64DDC.swift](https://github.com/MonitorControl/MonitorControl/blob/main/MonitorControl/Support/Arm64DDC.swift)
+   - 수정 대상: `Gnomon/Services/M1DDCClient.swift` 재작성 (+ `ProcessRunner` 사용 제거 가능)
+
+3. **corebrightnessdiag 셸아웃 제거** (notarization 친화, 1~2일)
+   - 현재 `/usr/libexec/corebrightnessdiag status-info` 파싱
+   - Apple Silicon: `AppleSPUHIDDevice` 직접 HID 쿼리 또는 내장 디스플레이 밝기 KVO
+   - 외부 바이너리 0개 되면 심사/배포 완전 자체 완결
+   - 수정 대상: `Gnomon/Services/LuxReader.swift`
+
+4. **Developer ID 서명 + Notarization + DMG 파이프라인** (0.5일)
+   - Apple Developer Program $99/년 가입
+   - Xcode "Developer ID Application" 인증서 설정
+   - `Scripts/release.sh` 스크립트: `xcodebuild archive` → `xcrun notarytool submit` → `xcrun stapler staple` → `create-dmg`
+   - GitHub Releases 자동 업로드 (`gh release create`)
+
+**권장 순서**: 1 → 2 → 3 → 4. 1, 2만 해도 사용성 크게 개선되므로 단계별 릴리즈 가능.
 
 ---
 
 ## 프로젝트 위치 / 상태
 
 - 경로: `/Users/sunguk/0.code/moniterpicker/gnomon/`
-- 최신 커밋/태그: **v1.1.7** (`adc25e9`)
-- 총 커밋 18개 (Phase 0~10 + v1.1 ~ v1.1.7)
-- Gate: `./Scripts/gate.sh` 4/4 통과 (lint / format / build / test)
-- 테스트: 41개 (3개는 GNOMON_INTEGRATION=1 필요)
+- GitHub: https://github.com/sunpark20/gnomon (main 브랜치)
+- 최신 커밋: **v1.3.0** (`9588da0`) — 이번 세션 전체를 한 커밋으로 푸시됨
+- Gate: `./Scripts/gate.sh` **4/4 통과** (lint / format / build / test)
+- 테스트: **48개** (3개는 GNOMON_INTEGRATION=1 필요)
 
 빌드:
 ```bash
 cd /Users/sunguk/0.code/moniterpicker/gnomon
-xcodegen generate  # .xcodeproj 재생성 (필요 시)
-./Scripts/gate.sh  # 모든 검증 1회
-# 또는 앱 실행:
-xcodebuild -project Gnomon.xcodeproj -scheme Gnomon -configuration Debug -derivedDataPath build -quiet build
+xcodegen generate              # .xcodeproj 재생성 (필요 시)
+./Scripts/gate.sh              # 모든 검증 1회
+xcodebuild -project Gnomon.xcodeproj -scheme Gnomon \
+  -configuration Debug -derivedDataPath build -quiet build
 open build/Build/Products/Debug/Gnomon.app
 ```
 
+**빌드/실행 주의사항** (이번 세션에서 발견):
+- Xcode Run 버튼 쓴 적 있으면 Xcode 창에서 반드시 **Stop(⏹)** 눌러서 종료. 그러지 않으면 `debugserver`가 프로세스를 물고 있어서 `pkill`이 안 먹고, 새 빌드 `open` 해도 같은 bundle id라 좀비에 focus만 감.
+- CLI로 일관되게 가는 걸 추천. `pkill -x Gnomon && open build/.../Gnomon.app`.
+
 ---
 
-## 이번 세션에서 완성된 것 (v1.1 ~ v1.1.7)
+## 이번 세션에서 완성된 것 (v1.2.2 → v1.3.0)
 
-| 태그 | 내용 |
+### 반응성 (핵심 이슈 "찔끔찔끔" 해결)
+
+| 기능 | 내용 |
 |---|---|
-| v1.1 | 단축키 재할당 + 해시계 동적 아이콘 + WoW/하스 유머 70개 + 맥북 실루엣 센서 아이콘 |
-| v1.1.1 | Settings를 sheet → 별도 Window scene으로 분리 + frame autosave |
-| v1.1.2 | Interval을 Int → Double (소수점 OK, 상한 제거) |
-| v1.1.3 | Interval 극단값(<1s, >3600s)에 위트 경고 |
-| v1.1.4 | 메인 창 기본 크기 840×540 → 1000×780 |
-| v1.1.5 | Settings 창 기본 크기 460×740 → 480×1080 (완전 펼침) |
-| v1.1.6 | Toggle Window 핫키가 메인+설정창 동시 토글 |
-| v1.1.7 | SystemInfo 수집 (macOS/모델/메모리) → `system.txt` 기록, "MacBook Sensor" → "Mac Sensor", `→ 83 tgt` → `→ 83%` |
-| v1.1.8 | 인라인 밝기/대비 입력에서 **2자리 숫자 자동 커밋** (10-99). 1자리나 100은 Enter 필요 |
+| **Big-delta snap** | `EMAFilter`에 `snapThreshold=50, snapDuration=3` 추가. 1초 샘플 3개 연속 ±50 lux 벌어지면 EMA 우회하고 raw로 점프. 단발성 스파이크는 counter 리셋으로 무시 |
+| **snap 즉시 DDC push** | snap 발동 시 sync interval 기다리지 않고 즉시 DDC 명령 전송. 30초 interval이어도 급변은 3초 내 반영. sync timer는 push 직후 재시작해서 이중 송신 방지 |
+| **darkFloor** | `BrightnessCurve.Parameters.darkFloorLux=3`. macOS 센서가 완전 가려도 ~1–3 lux 반환하는 특성 반영 → `lux ≤ 3`이면 바로 `b_min` 반환. 이전엔 target이 30 근처에서 멈춤 |
+
+### Settings UX
+
+- **Brightness Min/Max** Enter 적용 패턴 (Interval과 통일): pending 시 gold 외곽선 + "Enter로 적용" 힌트 + focus 이탈 시 auto-commit
+- **Interval 레이아웃**: hint 공간을 `opacity`로 예약 → 입력 중에 프리셋 버튼이 밀리는 튐 제거
+- **Sync tip 문구**: "인터벌과 상관없이 급격한 조도 변화는 즉시 반영됩니다." 추가
+- **Active Monitor 행 제거** (카드에서 이미 노출됨)
+
+### 메뉴바 아이콘
+
+- 해시계 그림자를 **24시간 시계 방향**으로 전환 (00:00=위, 06:00=오른쪽, 12:00=아래, 18:00=왼쪽)
+- **분(minute) 보간** + 1분 간격 refresh + **KST(Asia/Seoul) 고정** + `NSWorkspace.didWakeNotification` 연결 (sleep 복귀 즉시 재그리기)
+- Localize 필요 시 TODO — 지금은 KST hard-coded
+
+### 안정성 / 진단
+
+- **Auto 토글 황금색**: `.tint(Theme.gold)` — active/inactive 창 상태 모두에서 유지
+- **Contrast 방어**: `m1ddc getContrast`가 0 반환하면 무시하고 default 70 유지 (일시적 실패에 슬라이더가 0으로 망가지던 버그)
+- **Contrast "Reset 70"** 링크 추가 (이미 0으로 망가졌을 때 한 번에 복구)
+- **CSV 로그 스키마 v2**: `b_min`, `b_max` 칼럼 추가 → UserDefaults 오염 같은 상황을 역산 없이 바로 진단 가능. `ensureFile`이 기존 8칼럼 파일을 `log.csv.v1`로 자동 백업 후 새 파일 생성 (데이터 손실 없음)
+
+### 테스트
+
+- snap flag 동작 / darkFloor 경계값 / 스키마 자동 백업 시나리오 추가
+- **48 tests, 0 failures, 3 skipped**
+
+---
+
+## 배포 전략 (MAS 포기 근거)
+
+**Mac App Store는 아래 3가지 이유로 현실적 불가**:
+
+1. **DDC/CI 사용**: `IOAVService*` private API 요구. Apple 심사가 2021년 이후 지속적으로 거부. 경쟁사 전부 MAS 포기:
+   - Lunar, BetterDisplay, MonitorControl → **모두 자체 배포**
+   - MonitorControl Lite만 MAS에 있음 — **DDC 제거하고 gamma dimming 소프트웨어 방식**으로 축소
+2. **Ambient light sensor 직접 읽기**: sandbox에서 `/usr/libexec/*` 셸아웃 불가. IOKit HID 직접 접근도 sandbox 제약
+3. **Homebrew m1ddc 의존**: sandbox가 임의 외부 바이너리 실행 불가
+
+**결정**: 자체 배포 (Developer ID + Notarization). Lunar, Raycast, Rectangle, BetterDisplay 등이 다 같은 방식으로 잘 돌아가고 있음.
+
+**혹시 MAS 진입이 절실해지면**: Gnomon Lite (software dimming only)를 별도 타겟으로 만드는 방법은 가능. 지금은 스코프 밖.
+
+---
+
+## 활성 곡선 (PRD §5.2.1 v0.4)
+
+```
+b(lux) = b_min + (b_max - b_min) × clamp(log10(lux + 1) / log10(2001), 0, 1)
+b_min=20, b_max=95 (UserDefaults 저장)
+darkFloorLux=3 (lux ≤ 3 → b_min)
+
+EMA: α=0.2, 1초 샘플링
+  snapThreshold=50, snapDuration=3 → 3초 연속 ±50 lux면 EMA 건너뛰고 raw로 점프
+  snap 발동 시 sync interval 우회하고 DDC 즉시 push
+```
+
+- 대비는 자동 조정 안 함, 고정 70 (LG HDR 4K 출하 기본값)
+- 색온도는 스코프 제외 (f.lux / Night Shift 사용 안내)
 
 ---
 
@@ -71,84 +145,7 @@ open build/Build/Products/Debug/Gnomon.app
 | Toggle Window | `⌃⌥⌘ G` (메인 + 설정 동시 토글) |
 
 - 설정 → Hotkeys 행 **더블클릭**으로 재할당 가능
-- Reset to Defaults 링크로 원상복구
-
----
-
-## 활성 곡선 (PRD §5.2.1 v0.4)
-
-```
-b(lux) = b_min + (b_max - b_min) × clamp(log10(lux + 1) / log10(2001), 0, 1)
-b_min = 20 (기본), b_max = 95 (기본)
-```
-
-- **대비는 자동 조정 안 함**, 고정 70 (LG HDR 4K 출하 기본값)
-- 색온도는 스코프 제외 (f.lux / Night Shift 사용 안내)
-
----
-
-## 진단 중인 이슈 — "찔끔찔끔"
-
-### 증상
-사용자가 센서를 완전히 가렸는데, 외장 LG HDR 4K 모니터 밝기가 **한 번에 안 내려가고 약 2씩 단계적으로 감소**한다고 체감.
-
-### 제가 실측한 것 (v1.1.7 전)
-```
-t=0s  AggregatedLux=537 (센서 열림)
-t=6s  AggregatedLux=271 (가리기 시작)
-t=8s  AggregatedLux=0.99 (완전 가림)
-```
-
-→ macOS의 `AggregatedLux`는 **4초 내** 거의 0까지 떨어짐 (충분히 빠름).
-
-### 이론 (30초 interval + α=0.2 EMA)
-센서 가리면 30초 후 EMA는 거의 0으로 수렴 → target = b_min (20%)
-→ **DDC는 한 번에 82 → 20 명령 전송**해야 정상
-→ 만약 LG 모니터 OSD가 **자체적으로 부드럽게 애니메이션** 하면 사용자 눈엔 "찔끔찔끔"으로 보일 수 있음
-
-### 3가지 가설
-1. **LG HDR 4K OSD의 내부 smoothing** (하드웨어, Gnomon 탓 아님)
-2. **실제로 target이 단계적으로 떨어짐** (예상과 다름, 버그 가능성)
-3. **m1ddc 경합** (다른 디스플레이 앱 동시 실행 중)
-
-### 분석 방법
-v1.1.7의 `log.csv`에 다음 칼럼 기록됨:
-```
-timestamp, raw_lux, ema_lux, target_brightness, sent_brightness, contrast, auto_on, manual_override
-```
-
-5초 interval로 세팅 후 한 바퀴 돌면 각 칼럼 시계열 관찰로 **병목 지점 즉시 판별 가능**.
-
-### 받아야 할 데이터
-1. `~/Library/Application Support/Gnomon/log.csv` (마지막 20-30줄)
-2. `~/Library/Application Support/Gnomon/system.txt` (전체)
-
----
-
-## 잠재적 개선 방향 (이슈 분석 후 결정)
-
-가정: target이 단계적으로 떨어지는 게 확인되면 ↓
-
-### 옵션 A — EMA 약화/제거
-- 현재 α=0.2 → 0.5 또는 1.0 (즉, 스무딩 완전히 끔)
-- 장점: 반응성 ↑
-- 단점: 잠깐의 조도 튕김(사람 지나감 등)에 반응
-
-### 옵션 B — Raw lux 사용
-- `AggregatedLux` 대신 `Lux1`/`Lux2` 직접 사용
-- 장점: macOS의 pre-smoothing도 우회
-- 단점: 센서 노이즈에 더 민감
-
-### 옵션 C — Big-delta snap
-- `abs(target - lastSent) >= 10`이면 EMA 건너뛰고 raw 즉시 적용
-- 장점: 급격한 변화는 빠르게, 미세 변화는 부드럽게
-- 단점: 로직 복잡
-
-### 옵션 D — LG 모니터 고유 동작
-- 하드웨어 OSD smoothing이면 Gnomon 쪽 수정 불필요
-- 사용자에게 "모니터 설정에서 Response Time 또는 Brightness Transition 끄기" 안내
-
-로그 분석 전까진 결론 X.
+- 재할당 시 "Clear"로 바인딩 제거도 지원 (이번 세션에서 사용자가 직접 추가)
 
 ---
 
@@ -157,43 +154,46 @@ timestamp, raw_lux, ema_lux, target_brightness, sent_brightness, contrast, auto_
 ```
 Gnomon/
 ├── App/
-│   ├── GnomonApp.swift           # @main, WindowGroup + Settings Window scene
-│   ├── AppDelegate.swift         # 메뉴바 + IconUpdater 연결
-│   ├── StatusBarController.swift # NSStatusItem (메뉴바 아이콘)
-│   └── WindowManager.swift       # 메인/설정 창 동시 토글
+│   ├── GnomonApp.swift
+│   ├── AppDelegate.swift
+│   ├── StatusBarController.swift
+│   └── WindowManager.swift
 ├── Model/
-│   ├── BrightnessCurve.swift     # 곡선 공식
-│   ├── EMAFilter.swift           # α=0.2 스무딩
-│   ├── LuxCategory.swift         # 7구간 분류
-│   ├── MonitorID.swift           # m1ddc 디스플레이 ID
-│   ├── StringFormat.swift        # "30.00" → "30" 헬퍼
-│   └── WittyLabels.swift         # WoW/하스 유머 70개
+│   ├── BrightnessCurve.swift     # darkFloor 포함
+│   ├── DeveloperShouts.swift     # (이번 세션에서 사용자가 추가)
+│   ├── EMAFilter.swift           # snap 로직 포함
+│   ├── LuxCategory.swift
+│   ├── MonitorID.swift
+│   ├── StringFormat.swift
+│   └── WittyLabels.swift
 ├── Services/
-│   ├── AccessibilityChecker.swift
-│   ├── CSVLogger.swift           # log.csv + system.txt 기록
-│   ├── Debouncer.swift           # 200ms 슬라이더 debounce
-│   ├── HotkeyManager.swift       # 글로벌 핫키 (재할당 가능)
-│   ├── IconUpdater.swift         # 매시간 해시계 아이콘 갱신
-│   ├── LuxReader.swift           # corebrightnessdiag 래퍼
-│   ├── M1DDCClient.swift         # m1ddc 래퍼
-│   ├── ProcessRunner.swift       # Foundation.Process async 래퍼
-│   ├── SundialIconRenderer.swift # Core Graphics 해시계 그리기
-│   └── SystemInfo.swift          # 시스템 정보 수집 (v1.1.7+)
+│   ├── AccessibilityChecker.swift  # ← Carbon hotkey 전환 시 제거 후보
+│   ├── CSVLogger.swift             # v2 스키마 + 자동 백업
+│   ├── Debouncer.swift
+│   ├── HotkeyManager.swift         # ← Phase 1 (Carbon) 교체 대상
+│   ├── IconUpdater.swift           # 1분 tick + KST + wake notification
+│   ├── LuxReader.swift             # ← Phase 3 (IOKit HID) 교체 대상
+│   ├── M1DDCClient.swift           # ← Phase 2 (IOAVService 포팅) 대상
+│   ├── ProcessRunner.swift
+│   ├── SundialIconRenderer.swift   # 24h 시계 방향
+│   └── SystemInfo.swift
 ├── ViewModels/
-│   ├── AutoLoopController.swift  # @Observable 중앙 상태
+│   ├── AutoLoopController.swift    # snap 즉시 push 로직 포함
 │   └── OnboardingViewModel.swift
 └── Views/
-    ├── AmbientSensorCard.swift   # "Mac Sensor" 카드
-    ├── BrightnessCard.swift      # @Bindable 컨트롤
-    ├── ContrastCard.swift        # @Bindable 컨트롤
-    ├── ContentView.swift         # (삭제됨 — MainWindow가 대체)
-    ├── MainWindow.swift          # 전체 레이아웃
-    ├── StatusBar.swift           # Pause/Apply/Countdown
-    ├── Theme.swift               # 베이지+골드 팔레트
-    ├── WindowAccessor.swift      # NSWindow 브릿지 + FrameAutosave
+    ├── AmbientSensorCard.swift
+    ├── BrightnessCard.swift        # Auto 토글 황금색
+    ├── ContrastCard.swift          # Reset 70 링크
+    ├── MainWindow.swift
+    ├── Theme.swift
+    ├── WindowAccessor.swift
     ├── Onboarding/OnboardingWindow.swift
-    └── Settings/SettingsWindow.swift
+    └── Settings/
+        ├── HotkeyRow.swift
+        └── SettingsWindow.swift    # Min/Max Enter UX, hint 레이아웃 고정
 ```
+
+**제거된 파일**: `Gnomon/Views/StatusBar.swift` (StatusBarController로 통합)
 
 ---
 
@@ -201,14 +201,12 @@ Gnomon/
 
 - [PRD.md](PRD.md) — 개발자용 명세 (v0.5)
 - [BACKGROUND.md](BACKGROUND.md) — 제품 스토리 (홈페이지용)
-- [research/adaptive-curves.md](research/adaptive-curves.md) — 곡선 학술 근거 5,000단어
+- [research/adaptive-curves.md](research/adaptive-curves.md) — 곡선 학술 근거
 
 ---
 
 ## 새 세션 시작 멘트 예시
 
-사용자가 "새 세션에서 바로 todo 하라고" 했으니, 첫 응답으로 다음 내용을 정리해서 전달:
-
-1. 핸드오프 문서 읽음 안내
-2. **5초 interval 테스트 즉시 요청** (위 "TL;DR" 프로토콜 그대로)
-3. `log.csv` + `system.txt` 받으면 바로 분석 착수 가능하다고 고지
+1. 핸드오프 문서 (이 파일) 읽음 안내
+2. 사용자 의사 확인: "**Phase 1 (Carbon hotkey 교체)** 부터 시작할까?" — 가장 쉽고 리스크 낮음
+3. 또는 본인이 우선순위 바꿀지 (Notarization 파이프라인 먼저 짜서 v1.3.0 바로 릴리즈하고 싶어할 수도)
