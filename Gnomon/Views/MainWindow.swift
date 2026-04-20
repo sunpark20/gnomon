@@ -12,6 +12,7 @@ struct MainWindow: View {
     @Bindable var controller: AutoLoopController
     @State private var lastCategory: LuxCategory = .office
     @State private var phraseSeed = 0
+    @State private var showingSettings = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.1)) { _ in
@@ -19,6 +20,7 @@ struct MainWindow: View {
             let phrase = WittyLabels.pick(for: category, seed: phraseSeed)
 
             VStack(spacing: 0) {
+                topBar
                 HStack(alignment: .top, spacing: 20) {
                     AmbientSensorCard(
                         lux: controller.currentLux,
@@ -43,7 +45,7 @@ struct MainWindow: View {
                 )
             }
             .background(Theme.background)
-            .frame(minWidth: 820, minHeight: 500)
+            .frame(minWidth: 820, minHeight: 520)
             .onChange(of: category) { _, newCategory in
                 // Reseed the phrase only when the category changes, to avoid flicker.
                 if newCategory != lastCategory {
@@ -51,7 +53,26 @@ struct MainWindow: View {
                     phraseSeed = Int.random(in: 0 ..< 1000)
                 }
             }
+            .sheet(isPresented: $showingSettings) {
+                SettingsWindow(controller: controller, isPresented: $showingSettings)
+            }
         }
+    }
+
+    private var topBar: some View {
+        HStack {
+            Text("Gnomon")
+                .font(.headline)
+                .foregroundStyle(Theme.textPrimary)
+            Spacer()
+            Button(action: { showingSettings = true }, label: {
+                Image(systemName: "gearshape.fill")
+                    .foregroundStyle(Theme.gold)
+            })
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
     }
 
     private var secondsUntilNextSync: Int {
