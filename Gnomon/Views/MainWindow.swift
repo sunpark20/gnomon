@@ -10,9 +10,9 @@ import SwiftUI
 
 struct MainWindow: View {
     @Bindable var controller: AutoLoopController
+    @Environment(\.openWindow) private var openWindow
     @State private var lastCategory: LuxCategory = .office
     @State private var phraseSeed = 0
-    @State private var showingSettings = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.1)) { _ in
@@ -56,16 +56,13 @@ struct MainWindow: View {
                 // Fresh phrase on every DDC sync — keeps the app feeling alive.
                 phraseSeed = Int.random(in: 0 ..< 1000)
             }
-            .sheet(isPresented: $showingSettings) {
-                SettingsWindow(controller: controller, isPresented: $showingSettings)
-            }
         }
     }
 
     private var topBar: some View {
         HStack {
             Spacer()
-            Button(action: { showingSettings = true }, label: {
+            Button(action: { openWindow(id: "settings") }, label: {
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(Theme.gold)

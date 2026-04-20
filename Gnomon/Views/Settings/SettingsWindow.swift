@@ -15,7 +15,7 @@ import SwiftUI
 
 struct SettingsWindow: View {
     @Bindable var controller: AutoLoopController
-    @Binding var isPresented: Bool
+    @Environment(\.dismissWindow) private var dismissWindow
     @AppStorage("brightnessMin") private var brightnessMin = 20
     @AppStorage("brightnessMax") private var brightnessMax = 95
     @AppStorage("syncIntervalSeconds") private var syncIntervalSeconds = 30
@@ -34,8 +34,9 @@ struct SettingsWindow: View {
                 aboutSection
             }
             .padding(28)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: 440, height: 720)
+        .frame(minWidth: 460, idealWidth: 460, minHeight: 740, idealHeight: 740)
         .background(Theme.background)
         .onChange(of: brightnessMin) { _, _ in pushParameters() }
         .onChange(of: brightnessMax) { _, _ in pushParameters() }
@@ -62,12 +63,13 @@ struct SettingsWindow: View {
                     .foregroundStyle(Theme.textSecondary)
             }
             Spacer()
-            Button(action: { isPresented = false }, label: {
+            Button(action: { dismissWindow() }, label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
                     .foregroundStyle(Theme.textSecondary)
             })
             .buttonStyle(.plain)
+            .keyboardShortcut(.cancelAction)
         }
     }
 

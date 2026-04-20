@@ -16,13 +16,14 @@ struct GnomonApp: App {
     @AppStorage("onboardingCompletedAt") private var onboardingCompletedAt: Double = 0
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup("Gnomon", id: "main") {
             Group {
                 if onboardingCompletedAt > 0 {
                     MainWindow(controller: controller)
                         .background(WindowAccessor { window in
                             WindowManager.shared.register(window)
                         })
+                        .background(FrameAutosave(name: "GnomonMainWindow"))
                         .task {
                             await controller.start()
                             wireHotkeys()
@@ -34,7 +35,15 @@ struct GnomonApp: App {
                 }
             }
         }
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 840, height: 540)
+
+        Window("Gnomon Settings", id: "settings") {
+            SettingsWindow(controller: controller)
+                .background(FrameAutosave(name: "GnomonSettingsWindow"))
+        }
         .windowResizability(.contentSize)
+        .defaultSize(width: 460, height: 740)
     }
 
     @MainActor

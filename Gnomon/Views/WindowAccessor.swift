@@ -27,3 +27,22 @@ struct WindowAccessor: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
+
+/// Attaches a frame autosave name to the underlying NSWindow so macOS
+/// restores its position and size on next launch.
+struct FrameAutosave: NSViewRepresentable {
+    let name: String
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                guard let window = view.window else { return }
+                window.setFrameAutosaveName(name)
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
