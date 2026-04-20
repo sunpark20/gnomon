@@ -44,6 +44,9 @@ struct SettingsWindow: View {
         .onChange(of: syncIntervalSeconds) { _, newValue in
             controller.syncInterval = newValue
             intervalText = Self.formatInterval(newValue)
+            // Immediate apply + reset timer so user sees the change take
+            // effect without waiting for the previous cycle to finish.
+            controller.intervalDidChange()
         }
         .onChange(of: intervalFocused) { _, isFocused in
             // Autocommit when the field loses focus, so tabbing or clicking

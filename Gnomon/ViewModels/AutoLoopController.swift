@@ -270,6 +270,16 @@ public final class AutoLoopController {
         isPaused.toggle()
     }
 
+    /// Called when the user changes sync interval in Settings.
+    /// Applies the current target immediately so they see feedback right away,
+    /// then restarts the sync timer so the next cycle respects the new cadence.
+    public func intervalDidChange() {
+        applyNow()
+        syncTask?.cancel()
+        updateNextSyncAt()
+        scheduleSyncing()
+    }
+
     /// Manual contrast change (PRD §5.2.2 — not driven by ambient light).
     public func userSetContrast(_ value: Int) {
         let clamped = max(0, min(100, value))
