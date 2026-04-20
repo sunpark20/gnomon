@@ -12,17 +12,27 @@ struct GnomonApp: App {
     @NSApplicationDelegateAdaptor(GnomonAppDelegate.self) private var appDelegate
     @State private var controller = AutoLoopController()
     @State private var hotkeys = HotkeyManager()
+    @State private var onboarding = OnboardingViewModel()
+    @AppStorage("onboardingCompletedAt") private var onboardingCompletedAt: Double = 0
 
     var body: some Scene {
         WindowGroup {
-            MainWindow(controller: controller)
-                .background(WindowAccessor { window in
-                    WindowManager.shared.register(window)
-                })
-                .task {
-                    await controller.start()
-                    wireHotkeys()
+            Group {
+                if onboardingCompletedAt > 0 {
+                    MainWindow(controller: controller)
+                        .background(WindowAccessor { window in
+                            WindowManager.shared.register(window)
+                        })
+                        .task {
+                            await controller.start()
+                            wireHotkeys()
+                        }
+                } else {
+                    OnboardingWindow(viewModel: onboarding) {
+                        onboardingCompletedAt = Date().timeIntervalSince1970
+                    }
                 }
+            }
         }
         .windowResizability(.contentSize)
     }
