@@ -9,12 +9,13 @@ import AppKit
 import Foundation
 
 @MainActor
-public final class StatusBarController {
+public final class StatusBarController: NSObject, NSMenuDelegate {
     private let statusItem: NSStatusItem
     private var rightClickMenu: NSMenu?
 
-    public init() {
+    override public init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        super.init()
         configureButton()
         buildMenu()
     }
@@ -36,6 +37,7 @@ public final class StatusBarController {
 
     private func buildMenu() {
         let menu = NSMenu()
+        menu.delegate = self
         menu.addItem(withTitle: "Show Window", action: #selector(StatusBarProxy.showWindow), keyEquivalent: "")
             .target = StatusBarProxy.shared
         menu.addItem(.separator())
@@ -51,9 +53,18 @@ public final class StatusBarController {
         rightClickMenu = menu
     }
 
+    /// AppKit의 정식 status-item 메뉴 경로를 태워 띄운다.
+    /// `menu.popUp(...)`을 버튼 action 내부에서 직접 호출하면
+    /// 첫 팝업 시 scroll chevron이 잠깐 보이는 글리치가 생긴다.
     public func popUpMenu() {
         guard let menu = rightClickMenu, let button = statusItem.button else { return }
-        menu.popUp(positioning: nil, at: .zero, in: button)
+        statusItem.menu = menu
+        button.performClick(nil)
+    }
+
+    /// 메뉴가 닫히면 menu 연결을 풀어 좌클릭이 다시 button action으로 간다.
+    public func menuDidClose(_ menu: NSMenu) {
+        statusItem.menu = nil
     }
 }
 

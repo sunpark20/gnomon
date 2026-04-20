@@ -25,4 +25,4 @@
 --guardelse same-line
 --ifdef no-indent
 
---exclude .build,DerivedData,Gnomon/Resources
+--exclude .build,build,DerivedData,Gnomon/Resources

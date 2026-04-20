@@ -49,6 +49,26 @@ final class BrightnessCurveTests: XCTestCase {
         XCTAssertEqual(BrightnessCurve.target(lux: 1000, parameters: params), 100)
     }
 
+    func testDarkFloorReturnsMinBrightness() {
+        // macOS returns ~1–3 lux with a fully covered sensor; without the floor
+        // the curve outputs ~27–31 at those values, preventing the user's
+        // configured min brightness from ever being reached.
+        XCTAssertEqual(BrightnessCurve.target(lux: 0), 20)
+        XCTAssertEqual(BrightnessCurve.target(lux: 1), 20, "1 lux below default 3-lux floor → b_min")
+        XCTAssertEqual(BrightnessCurve.target(lux: 2), 20)
+        XCTAssertEqual(BrightnessCurve.target(lux: 3), 20, "3 lux at floor boundary → b_min")
+        XCTAssertGreaterThan(BrightnessCurve.target(lux: 4), 20, "Just above floor → curve takes over")
+    }
+
+    func testCustomDarkFloor() {
+        let params = BrightnessCurve.Parameters(
+            minBrightness: 10, maxBrightness: 100, luxCeiling: 1000, darkFloorLux: 0
+        )
+        // Floor=0 means only negative lux hits the floor; tiny positive values use the curve.
+        XCTAssertEqual(BrightnessCurve.target(lux: 0, parameters: params), 10)
+        XCTAssertGreaterThan(BrightnessCurve.target(lux: 0.5, parameters: params), 10)
+    }
+
     func testMonotonicallyIncreasing() {
         var previous = BrightnessCurve.target(lux: 0)
         for lux in stride(from: 10, through: 2000, by: 50) {

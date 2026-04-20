@@ -47,7 +47,9 @@ public final class AutoLoopController {
 
     // MARK: - Private state
 
-    private var ema = EMAFilter(alpha: 0.2)
+    // Snap: |sample − value| ≥ 50 lux for 3 consecutive 1s samples bypasses EMA.
+    // Catches covered-sensor / lights-off scenes in ~3s while ignoring blips.
+    private var ema = EMAFilter(alpha: 0.2, snapThreshold: 50, snapDuration: 3)
     private var sampleTask: Task<Void, Never>?
     private var syncTask: Task<Void, Never>?
     private let deadband = 2 // PRD §5.3
@@ -82,7 +84,12 @@ public final class AutoLoopController {
             activeMonitor = monitors.first(where: { !$0.uuid.isEmpty })
             if let monitor = activeMonitor {
                 lastSentBrightness = try? await ddcClient.getBrightness(on: monitor)
-                if let existingContrast = try? await ddcClient.getContrast(on: monitor) {
+                // m1ddc occasionally returns 0 when the read transiently fails;
+                // 0 is also a nonsensical usable contrast. Treat it as "no reading"
+                // and keep the factory default (70) rather than stamping 0 over it.
+                if let existingContrast = try? await ddcClient.getContrast(on: monitor),
+                   existingContrast > 0
+                {
                     contrast = existingContrast
                 }
             }
@@ -97,6 +104,9 @@ public final class AutoLoopController {
         } ?? []
         let info = SystemInfo.collect(activeDisplays: displayNames)
         Task.detached { [logger] in
+            // ensureFile first: upgrades the header if the schema changed and
+            // backs up the old file, so rotate operates on the current schema.
+            try? await logger.ensureFile()
             try? await logger.rotate()
             try? await logger.writeDiagnostics(info)
         }
@@ -154,10 +164,37 @@ public final class AutoLoopController {
             emaLux = ema.update(raw)
             if autoEnabled, !isPaused {
                 targetBrightness = BrightnessCurve.target(lux: emaLux, parameters: parameters)
+                // A snap means a sustained genuine scene change (covered sensor,
+                // lights off). Bypass the interval cadence and push immediately
+                // so the user sees a quick response even at long sync intervals.
+                // Modest EMA-tracked drift still waits for the normal sync tick.
+                if ema.didSnapOnLastUpdate {
+                    await snapSyncImmediately()
+                }
             }
         } catch {
             // Swallow transient read errors — UI keeps last good value.
             print("[AutoLoop] sample error: \(error.localizedDescription)")
+        }
+    }
+
+    private func snapSyncImmediately() async {
+        guard let monitor = activeMonitor else { return }
+        let target = targetBrightness
+        let last = lastSentBrightness ?? -9999
+        guard abs(target - last) >= deadband else { return }
+        do {
+            try await ddcClient.setBrightness(target, on: monitor)
+            lastSentBrightness = target
+            lastSyncAt = Date()
+            print("[snap-sync] ema=\(Int(emaLux)) target=\(target) (bypassed interval)")
+            await logEntry(sentBrightness: target, manualOverride: false)
+            // Reset the sync cadence so we don't double-write immediately after.
+            syncTask?.cancel()
+            updateNextSyncAt()
+            scheduleSyncing()
+        } catch {
+            print("[snap-sync] DDC error: \(error.localizedDescription)")
         }
     }
 
@@ -208,7 +245,9 @@ public final class AutoLoopController {
             sentBrightness: sentBrightness,
             contrast: contrast,
             autoOn: autoEnabled,
-            manualOverride: manualOverride
+            manualOverride: manualOverride,
+            bMin: parameters.minBrightness,
+            bMax: parameters.maxBrightness
         )
         try? await logger.append(entry)
     }

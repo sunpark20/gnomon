@@ -7,10 +7,12 @@
 //  menu bar (NSStatusItem.button.image).
 //
 //  The sundial is stylized — not astronomically accurate. The rotation
-//  convention is simple and legible:
-//    - 12:00 (noon): shadow points straight down
-//    - every hour advances the shadow 15° clockwise
-//    - so 06:00 → pointing left (west), 18:00 → pointing right (east)
+//  follows a 24-hour clock convention so it matches user intuition:
+//    - 00:00 / 24:00: shadow points up
+//    - 06:00: shadow points right
+//    - 12:00 (noon): shadow points down
+//    - 18:00: shadow points left
+//    - minutes are interpolated, so 23:39 sits slightly past the "up-left" hour mark
 //
 
 import AppKit
@@ -53,24 +55,24 @@ public enum SundialIconRenderer {
         )
     }
 
-    /// Converts an hour of day (0-23) into shadow rotation in degrees.
-    /// Noon = 0°, 06:00 = -90° (left), 18:00 = +90° (right).
-    public static func shadowAngle(for hour: Int) -> CGFloat {
-        let hourInDay = CGFloat(hour % 24)
-        return (hourInDay - 12) * 15
+    /// Converts time-of-day into shadow rotation in degrees, measured clockwise from straight up.
+    /// 00:00 = 0°, 06:00 = 90° (right), 12:00 = 180° (down), 18:00 = 270° (left).
+    public static func shadowAngle(hour: Int, minute: Int = 0) -> CGFloat {
+        let fractional = (Double(hour) + Double(minute) / 60.0).truncatingRemainder(dividingBy: 24)
+        return CGFloat(fractional * 15)
     }
 
-    public static func image(hour: Int, style: Style) -> NSImage {
+    public static func image(hour: Int, minute: Int = 0, style: Style) -> NSImage {
         let size = NSSize(width: style.diameter, height: style.diameter)
         let image = NSImage(size: size, flipped: false) { rect in
-            draw(in: rect, hour: hour, style: style)
+            draw(in: rect, hour: hour, minute: minute, style: style)
             return true
         }
         image.isTemplate = false
         return image
     }
 
-    private static func draw(in rect: CGRect, hour: Int, style: Style) {
+    private static func draw(in rect: CGRect, hour: Int, minute: Int, style: Style) {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         let scale = rect.width / style.diameter
         let center = CGPoint(x: rect.midX, y: rect.midY)
@@ -79,7 +81,7 @@ public enum SundialIconRenderer {
         drawTicks(ctx: ctx, center: center, radius: radius, style: style, scale: scale)
         drawShadow(
             ctx: ctx,
-            params: ShadowParams(center: center, radius: radius, hour: hour),
+            params: ShadowParams(center: center, radius: radius, hour: hour, minute: minute),
             style: style,
             scale: scale
         )
@@ -141,6 +143,7 @@ public enum SundialIconRenderer {
         let center: CGPoint
         let radius: CGFloat
         let hour: Int
+        let minute: Int
     }
 
     private static func drawShadow(
@@ -149,16 +152,19 @@ public enum SundialIconRenderer {
         style: Style,
         scale: CGFloat
     ) {
-        let angle = shadowAngle(for: params.hour) * .pi / 180
+        let angle = shadowAngle(hour: params.hour, minute: params.minute) * .pi / 180
         let shadowLength = params.radius * 0.88
         ctx.saveGState()
         ctx.setStrokeColor(style.shadowColor.cgColor)
         ctx.setLineCap(.round)
         ctx.setLineWidth(max(2, style.diameter * 0.022 * scale))
         ctx.move(to: params.center)
+        // y-axis is up in the unflipped coordinate space; 0° must point up so
+        // cos contributes positively (not negatively as in the prior sundial
+        // convention where noon pointed down).
         ctx.addLine(to: CGPoint(
             x: params.center.x + sin(angle) * shadowLength,
-            y: params.center.y - cos(angle) * shadowLength
+            y: params.center.y + cos(angle) * shadowLength
         ))
         ctx.strokePath()
         ctx.restoreGState()

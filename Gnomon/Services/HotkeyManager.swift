@@ -53,6 +53,15 @@ public struct KeyBinding: Sendable, Codable, Equatable {
     /// The three-modifier combo Gnomon uses by default for every hotkey.
     public static let controlOptionCommand: NSEvent.ModifierFlags = [.control, .option, .command]
 
+    /// Sentinel for "this action has no hotkey assigned". Recorder only ever
+    /// produces bindings that contain at least one modifier, so this shape
+    /// cannot collide with a real binding.
+    public static let disabled = KeyBinding(modifiers: [], keyCode: 0)
+
+    public var isDisabled: Bool {
+        modifierRawValue == 0 && keyCode == 0
+    }
+
     public static let defaults: [HotkeyAction: KeyBinding] = [
         .brightnessUp: KeyBinding(modifiers: controlOptionCommand, keyCode: UInt16(kVK_ANSI_Equal)),
         .brightnessDown: KeyBinding(modifiers: controlOptionCommand, keyCode: UInt16(kVK_ANSI_Minus)),
@@ -64,6 +73,7 @@ public struct KeyBinding: Sendable, Codable, Equatable {
 
     /// Human-readable form like "⌃⌥⌘ =" used in Settings.
     public var humanReadable: String {
+        if isDisabled { return "—" }
         var parts: [String] = []
         if modifiers.contains(.control) { parts.append("⌃") }
         if modifiers.contains(.option) { parts.append("⌥") }
@@ -247,6 +257,7 @@ public final class HotkeyManager {
     public func mapAction(from event: NSEvent) -> HotkeyAction? {
         let masked = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         for (action, binding) in bindings {
+            guard !binding.isDisabled else { continue }
             if binding.keyCode == event.keyCode,
                masked.intersection([.control, .option, .command, .shift]) == binding.modifiers
             {

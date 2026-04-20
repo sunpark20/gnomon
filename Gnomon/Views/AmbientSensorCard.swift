@@ -2,81 +2,127 @@
 //  AmbientSensorCard.swift
 //  Gnomon
 //
-//  Left-column card. Shows big lux number + gauge + witty caption.
+//  Left-column card. Shows big lux number + gauge + rotating message
+//  (witty caption / developer shout).
 //
 
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import SwiftUI
 
 struct AmbientSensorCard: View {
     let lux: Double
     let category: LuxCategory
-    let wittyPhrase: String
+    let message: DisplayMessage
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+
+            // 1. 상단: 타이틀 (중앙 정렬)
             HStack(spacing: 10) {
                 macBookBadge
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Mac Sensor")
-                        .font(.headline)
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("내장 조도센서 (Ambient Light)")
-                        .font(.caption2)
-                        .foregroundStyle(Theme.textSecondary)
-                }
+                Text("Mac Sensor")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(Theme.textPrimary)
             }
 
             Spacer(minLength: 0)
 
-            VStack(alignment: .center, spacing: 4) {
+            // 2. 중앙: 럭스 수치 (크기 강조)
+            VStack(spacing: 0) {
                 Text("Current Lux")
                     .font(.caption)
                     .foregroundStyle(Theme.textSecondary)
-                HStack(alignment: .lastTextBaseline, spacing: 4) {
-                    Text(formattedLux)
-                        .font(.system(size: 56, weight: .heavy, design: .default))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("lx")
-                        .font(.title3)
-                        .foregroundStyle(Theme.textSecondary)
-                }
+                    .padding(.bottom, 4)
+                Text(formattedLux)
+                    .font(.system(size: 80, weight: .heavy, design: .default))
+                    .foregroundStyle(Theme.textPrimary)
+                Text("lx")
+                    .font(.title3)
+                    .foregroundStyle(Theme.textSecondary)
             }
-            .frame(maxWidth: .infinity)
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Dark").font(.caption2).foregroundStyle(Theme.textSecondary)
-                    Spacer()
-                    Text("Bright").font(.caption2).foregroundStyle(Theme.textSecondary)
-                }
-                GeometryReader { proxy in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Theme.gold.opacity(0.15))
-                        Capsule()
-                            .fill(LinearGradient(
-                                colors: [Theme.gold.opacity(0.6), Theme.gold],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ))
-                            .frame(width: max(8, proxy.size.width * gaugeFraction))
+            Spacer(minLength: 0)
+
+            // 3. 하단: 게이지와 메시지
+            VStack(spacing: 40) {
+                // 밝기 게이지
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Dark").font(.caption2).foregroundStyle(Theme.textSecondary)
+                        Spacer()
+                        Text("Bright").font(.caption2).foregroundStyle(Theme.textSecondary)
                     }
+                    GeometryReader { proxy in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Theme.gold.opacity(0.15))
+                            Capsule()
+                                .fill(LinearGradient(
+                                    colors: [Theme.gold.opacity(0.6), Theme.gold],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ))
+                                .frame(width: max(8, proxy.size.width * gaugeFraction))
+                        }
+                    }
+                    .frame(height: 8)
                 }
-                .frame(height: 8)
-            }
 
-            Text(wittyPhrase)
-                .italic()
-                .font(.callout)
-                .foregroundStyle(Theme.textSecondary.opacity(0.8))
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
+                // 위트 메시지 혹은 샤웃
+                messageView
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
 
             Spacer(minLength: 0)
         }
-        .padding(24)
-        .frame(minWidth: 260, minHeight: 440)
+        .padding(32)
+        // 오른쪽 뷰들의 전체 높이만큼 늘어나도록 팽창 속성 부여
+        .frame(minWidth: 260, maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+    }
+
+    @ViewBuilder
+    private var messageView: some View {
+        switch message {
+        case let .witty(phrase):
+            Text(phrase)
+                .font(.callout)
+                .foregroundStyle(Theme.textSecondary.opacity(0.8))
+                .multilineTextAlignment(.center)
+        case let .shout(shout):
+            shoutView(shout)
+        }
+    }
+
+    @ViewBuilder
+    private func shoutView(_ shout: DeveloperShout) -> some View {
+        switch shout {
+        case let .text(body):
+            Text(body)
+                .font(.callout)
+                .foregroundStyle(Theme.textPrimary)
+                .multilineTextAlignment(.center)
+        case let .link(title, url):
+            Link(destination: url) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up.right.square.fill")
+                    Text(title).fontWeight(.semibold)
+                }
+                .font(.callout)
+                .foregroundStyle(Theme.gold)
+            }
+            .buttonStyle(.plain)
+        case let .qrCode(title, payload):
+            VStack(spacing: 6) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+                QRCodeImage(payload: payload)
+                    .frame(width: 72, height: 72)
+            }
+        }
     }
 
     private var formattedLux: String {
@@ -116,11 +162,45 @@ struct AmbientSensorCard: View {
     }
 }
 
-#Preview("Day") {
+private struct QRCodeImage: View {
+    let payload: String
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Color.clear
+            }
+        }
+        .task(id: payload) {
+            image = Self.generate(payload: payload)
+        }
+    }
+
+    private static func generate(payload: String) -> NSImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(payload.utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage else { return nil }
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: 8, y: 8))
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else {
+            return nil
+        }
+        return NSImage(cgImage: cgImage, size: scaled.extent.size)
+    }
+}
+
+#Preview("Night") {
     AmbientSensorCard(
-        lux: 428,
-        category: .office,
-        wittyPhrase: "전형적인 사무실 조명입니다."
+        lux: 17,
+        category: .veryDim,
+        message: .witty("야간 레이드 시작 가능한 조도입니다.")
     )
     .padding()
     .background(Theme.background)

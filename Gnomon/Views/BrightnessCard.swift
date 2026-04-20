@@ -5,10 +5,13 @@
 //  Phase 4 interactive: slider + tap-to-edit + Auto toggle.
 //
 
+import AppKit
 import SwiftUI
 
 struct BrightnessCard: View {
     @Bindable var controller: AutoLoopController
+    let nextSyncSecondsRemaining: Int
+    let onSyncNow: () -> Void
     @State private var isEditingNumber = false
     @State private var editText = ""
     @State private var lastAutoWasOn = true
@@ -17,14 +20,18 @@ struct BrightnessCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
+            if controller.autoEnabled {
+                syncControls
+            }
             valueRow
             slider
-            subtitle
+            rangeLabels
         }
         .padding(24)
         .frame(minHeight: 200)
         .background(Theme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20))
+        .animation(.easeInOut(duration: 0.2), value: controller.autoEnabled)
         .onChange(of: controller.autoEnabled) { _, isOn in
             if !isOn, lastAutoWasOn {
                 triggerPulse()
@@ -48,6 +55,7 @@ struct BrightnessCard: View {
                 set: { _ in controller.toggleAuto() }
             ))
             .toggleStyle(.switch)
+            .tint(Theme.gold)
             .labelsHidden()
             HStack(spacing: 6) {
                 Text("Auto").font(.caption).foregroundStyle(Theme.textSecondary)
@@ -81,6 +89,7 @@ struct BrightnessCard: View {
                     .foregroundStyle(Theme.textPrimary)
                     .scaleEffect(pulseScale)
                     .onTapGesture {
+                        guard !controller.autoEnabled else { return }
                         editText = String(current)
                         isEditingNumber = true
                     }
@@ -107,18 +116,48 @@ struct BrightnessCard: View {
         Slider(
             value: Binding(
                 get: { Double(current) },
-                set: { controller.userSetBrightness(Int($0)) }
+                set: { newValue in
+                    let rounded = Int(newValue)
+                    if rounded != current {
+                        NSHapticFeedbackManager.defaultPerformer
+                            .perform(.alignment, performanceTime: .now)
+                    }
+                    controller.userSetBrightness(rounded)
+                }
             ),
             in: 0 ... 100,
             step: 1
         )
         .tint(Theme.gold)
+        .disabled(controller.autoEnabled)
+        .opacity(controller.autoEnabled ? 0.5 : 1)
     }
 
-    private var subtitle: some View {
-        Text("Control overall display luminance.")
-            .font(.caption)
-            .foregroundStyle(Theme.textSecondary)
+    private var rangeLabels: some View {
+        HStack {
+            Text("Min").font(.caption2).foregroundStyle(Theme.textSecondary)
+            Spacer()
+            Text("Max").font(.caption2).foregroundStyle(Theme.textSecondary)
+        }
+    }
+
+    private var syncControls: some View {
+        HStack(spacing: 12) {
+            Spacer()
+            Button(action: onSyncNow) {
+                Label("Sync Now", systemImage: "arrow.clockwise")
+                    .labelStyle(.titleAndIcon)
+            }
+            .buttonStyle(.bordered)
+            HStack(spacing: 6) {
+                Image(systemName: "timer")
+                    .foregroundStyle(Theme.textSecondary)
+                Text("Next sync in \(max(0, nextSyncSecondsRemaining))s")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+                    .monospacedDigit()
+            }
+        }
     }
 
     private func commitEditedValue() {

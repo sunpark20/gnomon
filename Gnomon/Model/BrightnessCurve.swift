@@ -20,11 +20,22 @@ public enum BrightnessCurve {
         public var minBrightness: Int
         public var maxBrightness: Int
         public var luxCeiling: Double
+        /// Lux at or below which the sensor is treated as fully dark → returns minBrightness.
+        /// macOS returns ~1–3 lux even with the sensor completely covered, so a strict
+        /// lux=0 floor never triggers the true minimum. 3 lux is the empirical covered-sensor
+        /// floor on Apple Silicon and still well below any lit-room reading.
+        public var darkFloorLux: Double
 
-        public init(minBrightness: Int = 20, maxBrightness: Int = 95, luxCeiling: Double = 2000) {
+        public init(
+            minBrightness: Int = 20,
+            maxBrightness: Int = 95,
+            luxCeiling: Double = 2000,
+            darkFloorLux: Double = 3
+        ) {
             self.minBrightness = minBrightness
             self.maxBrightness = maxBrightness
             self.luxCeiling = luxCeiling
+            self.darkFloorLux = darkFloorLux
         }
 
         public static let `default` = Parameters()
@@ -34,6 +45,9 @@ public enum BrightnessCurve {
     /// Returned value is clamped to [minBrightness, maxBrightness] and rounded to nearest Int.
     public static func target(lux: Double, parameters: Parameters = .default) -> Int {
         let safeLux = max(0, lux)
+        if safeLux <= parameters.darkFloorLux {
+            return parameters.minBrightness
+        }
         let numerator = log10(safeLux + 1)
         let denominator = log10(parameters.luxCeiling + 1)
         let normalized = max(0, min(1, numerator / denominator))

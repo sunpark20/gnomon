@@ -51,4 +51,52 @@ final class EMAFilterTests: XCTestCase {
         }
         XCTAssertEqual(y, 32.768, accuracy: 0.01)
     }
+
+    func testSnapTriggersAfterSustainedLargeDelta() {
+        var filter = EMAFilter(alpha: 0.2, snapThreshold: 50, snapDuration: 3)
+        filter.update(500)
+        // Three consecutive samples 450+ below previous → snap on the 3rd.
+        XCTAssertEqual(filter.update(0), 400, accuracy: 0.01, "1st large delta: still EMA")
+        XCTAssertFalse(filter.didSnapOnLastUpdate)
+        XCTAssertEqual(filter.update(0), 320, accuracy: 0.01, "2nd large delta: still EMA")
+        XCTAssertFalse(filter.didSnapOnLastUpdate)
+        XCTAssertEqual(filter.update(0), 0, "3rd consecutive large delta: snap to sample")
+        XCTAssertTrue(filter.didSnapOnLastUpdate, "Snap flag should fire on the jump")
+        // Next stable sample must clear the flag so callers don't re-trigger.
+        _ = filter.update(0)
+        XCTAssertFalse(filter.didSnapOnLastUpdate)
+    }
+
+    func testSmallDeltaResetsSnapCounter() {
+        // Verify a brief stable interval mid-transition prevents premature snap.
+        var filter = EMAFilter(alpha: 0.2, snapThreshold: 50, snapDuration: 3)
+        filter.update(500)
+        _ = filter.update(0) // counter=1, value=400
+        _ = filter.update(0) // counter=2, value=320
+        _ = filter.update(310) // |310-320|=10 < 50 → counter reset, value≈318
+        let y = filter.update(0) // counter=1, still EMA (not snapped to 0)
+        XCTAssertGreaterThan(y, 200, "After counter reset, snap must not trigger")
+        XCTAssertLessThan(y, 300, "Should have continued EMA decay, not snapped")
+    }
+
+    func testSnapDisabledByDefault() {
+        // Default init keeps legacy behavior — no snap threshold.
+        var filter = EMAFilter(alpha: 0.2)
+        filter.update(500)
+        for _ in 0 ..< 10 {
+            _ = filter.update(0)
+        }
+        XCTAssertGreaterThan(filter.value ?? 0, 50, "Without snapThreshold, pure EMA decay")
+    }
+
+    func testResetClearsSnapCounter() {
+        var filter = EMAFilter(alpha: 0.2, snapThreshold: 50, snapDuration: 3)
+        filter.update(500)
+        _ = filter.update(0)
+        _ = filter.update(0) // counter=2
+        filter.reset()
+        filter.update(500)
+        let y = filter.update(0) // counter should be 1, not 3
+        XCTAssertGreaterThan(y, 300, "Reset must clear consecutive-delta counter")
+    }
 }

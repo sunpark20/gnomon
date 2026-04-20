@@ -5,6 +5,7 @@
 //  Phase 5 interactive manual-only contrast slider (PRD §5.2.2).
 //
 
+import AppKit
 import SwiftUI
 
 struct ContrastCard: View {
@@ -18,7 +19,6 @@ struct ContrastCard: View {
             valueRow
             slider
             rangeLabels
-            subtitle
         }
         .padding(24)
         .frame(minHeight: 200)
@@ -73,7 +73,14 @@ struct ContrastCard: View {
         Slider(
             value: Binding(
                 get: { Double(controller.contrast) },
-                set: { controller.userSetContrast(Int($0)) }
+                set: { newValue in
+                    let rounded = Int(newValue)
+                    if rounded != controller.contrast {
+                        NSHapticFeedbackManager.defaultPerformer
+                            .perform(.alignment, performanceTime: .now)
+                    }
+                    controller.userSetContrast(rounded)
+                }
             ),
             in: 0 ... 100,
             step: 1
@@ -87,12 +94,6 @@ struct ContrastCard: View {
             Spacer()
             Text("Max").font(.caption2).foregroundStyle(Theme.textSecondary)
         }
-    }
-
-    private var subtitle: some View {
-        Text("Adjust tonal dynamic range. Factory default suggested.")
-            .font(.caption)
-            .foregroundStyle(Theme.textSecondary)
     }
 
     private func commit() {

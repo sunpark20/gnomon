@@ -16,6 +16,7 @@ struct HotkeyRow: View {
     let onStartRecording: () -> Void
     let onCaptured: (KeyBinding) -> Void
     let onCancel: () -> Void
+    let onClear: () -> Void
 
     var body: some View {
         HStack {
@@ -23,21 +24,28 @@ struct HotkeyRow: View {
                 .font(.callout)
                 .foregroundStyle(Theme.textPrimary)
             Spacer()
-            ZStack {
-                if isRecording {
+            if isRecording {
+                HStack(spacing: 6) {
                     HotkeyRecorder(
                         onCaptured: onCaptured,
                         onCancel: onCancel
                     )
                     .frame(width: 120, height: 28)
-                } else {
-                    Text(binding.humanReadable)
-                        .font(.system(.caption, design: .monospaced))
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Theme.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .foregroundStyle(Theme.textPrimary)
+                    Button(action: onClear) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear this hotkey")
                 }
+            } else {
+                Text(binding.humanReadable)
+                    .font(.system(.caption, design: .monospaced))
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Theme.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .foregroundStyle(Theme.textPrimary)
             }
         }
         .contentShape(Rectangle())

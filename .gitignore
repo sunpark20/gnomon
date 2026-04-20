@@ -49,3 +49,6 @@ fastlane/test_output
 *.lock
 .env
 .env.local
+
+# Local scratch / backups (not for VCS)
+Gnomon/Views/백업/
