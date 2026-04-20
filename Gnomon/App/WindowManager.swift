@@ -65,15 +65,11 @@ public final class WindowManager {
     }
 
     public func toggleAll() {
-        let tracked = entries.values.compactMap(\.window)
-        let visible = tracked.filter(\.isVisible)
-        if !visible.isEmpty {
+        let anyVisible = entries.values.contains { $0.window?.isVisible == true }
+        if anyVisible {
             hideAll()
-        } else if !tracked.isEmpty {
-            showRememberedOrMain()
         } else {
-            bringAppForward()
-            reopenViaSwiftUI()
+            showAll()
         }
     }
 
@@ -85,16 +81,15 @@ public final class WindowManager {
         }
     }
 
-    private func showRememberedOrMain() {
+    private func showAll() {
         bringAppForward()
-        var shownAny = false
-        for (_, entry) in entries {
-            guard let window = entry.window, entry.wasVisible else { continue }
-            window.makeKeyAndOrderFront(nil)
-            shownAny = true
+        if let w = entries[.main]?.window {
+            w.makeKeyAndOrderFront(nil)
+        } else {
+            reopenViaSwiftUI()
         }
-        if !shownAny {
-            entries[.main]?.window?.makeKeyAndOrderFront(nil)
+        if let w = entries[.settings]?.window, entries[.settings]?.wasVisible == true {
+            w.makeKeyAndOrderFront(nil)
         }
     }
 

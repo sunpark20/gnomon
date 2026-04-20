@@ -53,9 +53,6 @@ public final class GnomonAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        if !hasVisibleWindows {
-            WindowManager.shared.show()
-        }
         return true
     }
 
