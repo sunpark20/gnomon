@@ -13,46 +13,38 @@ struct OnboardingWindow: View {
     let onComplete: () -> Void
 
     var body: some View {
-        VStack(spacing: 24) {
-            header
-            VStack(spacing: 12) {
-                CheckRow(
-                    title: "Detecting external monitor…",
-                    state: viewModel.ddcState,
-                    retry: { Task { await viewModel.runDDCCheck() } }
-                )
-                CheckRow(
-                    title: "Checking ambient light sensor…",
-                    state: viewModel.luxState,
-                    retry: { Task { await viewModel.runLuxCheck() } }
-                )
-                CheckRow(
-                    title: "Accessibility permission (for hotkeys)",
-                    state: viewModel.accessibilityState,
-                    retry: {
-                        viewModel.requestAccessibilityPermission()
-                        viewModel.runAccessibilityCheck()
-                    }
-                )
-                ColorTempNotice()
-            }
-            .padding(.horizontal, 32)
-            .padding(.vertical, 16)
-
+        VStack(spacing: 0) {
             Spacer()
-
-            HStack(spacing: 16) {
-                Button("Skip for now", action: onComplete)
-                    .buttonStyle(.borderless)
-                Spacer()
-                Button(allReady ? "Start" : "Start Calibration", action: onComplete)
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.gold)
-                    .disabled(viewModel.ddcState == .running || viewModel.luxState == .running)
+            VStack(spacing: 24) {
+                header
+                VStack(spacing: 12) {
+                    CheckRow(
+                        title: "Detecting external monitor…",
+                        state: viewModel.ddcState,
+                        retry: { Task { await viewModel.runDDCCheck() } }
+                    )
+                    CheckRow(
+                        title: "Checking ambient light sensor…",
+                        state: viewModel.luxState,
+                        retry: { Task { await viewModel.runLuxCheck() } }
+                    )
+                    CalibrationTip()
+                }
+                HStack(spacing: 16) {
+                    Button("Skip for now", action: onComplete)
+                        .buttonStyle(.borderless)
+                    Spacer()
+                    Button(allReady ? "Start" : "Start Calibration", action: onComplete)
+                        .buttonStyle(.borderedProminent)
+                        .tint(Theme.gold)
+                        .disabled(viewModel.ddcState == .running || viewModel.luxState == .running)
+                }
             }
+            .frame(maxWidth: 460)
             .padding(32)
+            Spacer()
         }
-        .frame(width: 520, height: 540)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background)
         .task { await viewModel.runAll() }
     }
@@ -79,7 +71,7 @@ struct OnboardingWindow: View {
                 .font(.callout)
                 .foregroundStyle(Theme.textSecondary)
         }
-        .padding(.top, 40)
+        .padding(.top, 32)
     }
 }
 
@@ -136,20 +128,21 @@ private struct CheckRow: View {
     }
 }
 
-private struct ColorTempNotice: View {
+private struct CalibrationTip: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "info.circle")
+            Image(systemName: "moon.stars")
                 .foregroundStyle(Theme.gold)
                 .frame(width: 28, height: 28)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Color Temperature Notice")
+                Text("캘리브레이션 필수")
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundStyle(Theme.textPrimary)
-                Text("Gnomon은 색온도를 조정하지 않습니다. macOS Night Shift 또는 f.lux를 함께 사용하세요.")
+                    .foregroundStyle(.orange)
+                Text("해가 진 뒤 불을 끄고 어두운 환경에서 진행해주세요. Settings → Brightness Range → 최저 밝기 조도")
                     .font(.caption)
                     .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
         }

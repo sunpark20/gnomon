@@ -4,9 +4,8 @@
 //
 //  Runs the initial diagnostic checklist (PRD §5.9):
 //    1. lux sensor available
-//    2. m1ddc + LG HDR 4K detected
-//    3. Accessibility permission (required for hotkeys)
-//    4. Color-temp notice (informational)
+//    2. DDC-addressable external monitor detected
+//    3. Color-temp notice (informational)
 //
 
 import AppKit
@@ -25,7 +24,6 @@ public final class OnboardingViewModel {
 
     public var luxState: CheckState = .pending
     public var ddcState: CheckState = .pending
-    public var accessibilityState: CheckState = .pending
 
     private let luxReader: LuxReader
     private let ddcClient: M1DDCClient
@@ -36,7 +34,7 @@ public final class OnboardingViewModel {
     }
 
     public var allPassed: Bool {
-        [luxState, ddcState, accessibilityState].allSatisfy {
+        [luxState, ddcState].allSatisfy {
             if case .passed = $0 { return true }
             return false
         }
@@ -45,7 +43,6 @@ public final class OnboardingViewModel {
     public func runAll() async {
         await runLuxCheck()
         await runDDCCheck()
-        runAccessibilityCheck()
     }
 
     public func runLuxCheck() async {
@@ -69,23 +66,9 @@ public final class OnboardingViewModel {
                 let name = external.first?.displayName ?? "external monitor"
                 ddcState = .passed(detail: "Detected: \(name)")
             }
-        } catch let ProcessRunner.RunError.executableNotFound(path) {
-            ddcState = .failed(detail: "m1ddc not installed. Install with: brew install m1ddc (tried \(path))")
         } catch {
-            ddcState = .failed(detail: "m1ddc error: \(error.localizedDescription)")
+            ddcState = .failed(detail: "DDC error: \(error.localizedDescription)")
         }
-    }
-
-    public func runAccessibilityCheck() {
-        if AccessibilityChecker.isTrusted() {
-            accessibilityState = .passed(detail: "Accessibility permission granted")
-        } else {
-            accessibilityState = .failed(detail: "Hotkeys need Accessibility permission")
-        }
-    }
-
-    public func requestAccessibilityPermission() {
-        AccessibilityChecker.requestAccess()
     }
 
     public func openLunarWarningIfNeeded() -> String? {

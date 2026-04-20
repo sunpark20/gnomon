@@ -20,35 +20,36 @@ import SwiftUI
 struct SettingsWindow: View {
     @Bindable var controller: AutoLoopController
     @Environment(\.dismissWindow) private var dismissWindow
-    @AppStorage("brightnessMin") private var brightnessMin = 20
-    @AppStorage("brightnessMax") private var brightnessMax = 95
+    @AppStorage("brightnessMin") private var brightnessMin = 0
+    @AppStorage("brightnessMax") private var brightnessMax = 100
+    @AppStorage("darkFloorLux") private var darkFloorLux: Double = 15
     @AppStorage("syncIntervalSeconds") private var syncIntervalSeconds: Double = 30
     @State private var recorderBindings: [HotkeyAction: KeyBinding] = HotkeyBindingStore.load()
     @State private var recordingAction: HotkeyAction?
     @State private var intervalText = "30"
-    @State private var minText = "20"
-    @State private var maxText = "95"
+    @State private var minText = "0"
+    @State private var maxText = "100"
+    @State private var darkFloorText = "15"
     @State private var emailCopied = false
     @FocusState private var intervalFocused: Bool
     @FocusState private var minFocused: Bool
     @FocusState private var maxFocused: Bool
+    @FocusState private var darkFloorFocused: Bool
 
     private let bugReportEmail = "coastguard2681@gmail.com"
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                header
                 hotkeysSection
                 brightnessRangeSection
                 syncSection
                 bugReportSection
-                aboutSection
             }
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minWidth: 480, idealWidth: 480, minHeight: 900, idealHeight: 1080)
+        .frame(minWidth: 480, idealWidth: 480, idealHeight: 900)
         .background(Theme.background)
         .onChange(of: brightnessMin) { _, newValue in
             minText = String(newValue)
@@ -57,6 +58,13 @@ struct SettingsWindow: View {
         .onChange(of: brightnessMax) { _, newValue in
             maxText = String(newValue)
             pushParameters()
+        }
+        .onChange(of: darkFloorLux) { _, newValue in
+            darkFloorText = Self.formatInterval(newValue)
+            pushParameters()
+        }
+        .onChange(of: darkFloorFocused) { _, isFocused in
+            if !isFocused { commitDarkFloorText() }
         }
         .onChange(of: syncIntervalSeconds) { _, newValue in
             controller.syncInterval = newValue
@@ -80,12 +88,13 @@ struct SettingsWindow: View {
             intervalText = Self.formatInterval(syncIntervalSeconds)
             minText = String(brightnessMin)
             maxText = String(brightnessMax)
+            darkFloorText = Self.formatInterval(darkFloorLux)
         }
         .onDisappear {
-            // Safety net: window is closing. Commit anything still pending.
             commitIntervalText()
             commitMinText()
             commitMaxText()
+            commitDarkFloorText()
         }
     }
 
@@ -134,7 +143,15 @@ struct SettingsWindow: View {
     }
 
     private var hotkeysSection: some View {
-        SettingsSection(title: "Hotkeys", iconName: "keyboard") {
+        SettingsSection(title: "Hotkeys", iconName: "keyboard", trailing: {
+            Button(action: { dismissWindow() }, label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(Theme.textSecondary)
+            })
+            .buttonStyle(.plain)
+            .keyboardShortcut(.cancelAction)
+        }) {
             Text("Double-click a row to reassign. Press ESC to cancel.")
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
@@ -176,6 +193,10 @@ struct SettingsWindow: View {
         }
     }
 
+    private var darkFloorIsPending: Bool {
+        darkFloorText.trimmingCharacters(in: .whitespaces) != Self.formatInterval(darkFloorLux)
+    }
+
     private var brightnessRangeSection: some View {
         SettingsSection(title: "Brightness Range", iconName: "sun.max") {
             HStack(alignment: .top) {
@@ -195,11 +216,49 @@ struct SettingsWindow: View {
                 )
                 Spacer()
                 Button("Reset") {
-                    brightnessMin = 20
-                    brightnessMax = 95
+                    brightnessMin = 0
+                    brightnessMax = 100
+                    darkFloorLux = 15
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(Theme.gold)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("최저 밝기 조도").font(.caption).foregroundStyle(Theme.textSecondary)
+                        HStack(spacing: 4) {
+                            TextField("15", text: $darkFloorText)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 70)
+                                .focused($darkFloorFocused)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(darkFloorIsPending ? Theme.gold : Color.clear, lineWidth: 2)
+                                        .animation(.easeInOut(duration: 0.15), value: darkFloorIsPending)
+                                )
+                                .onSubmit { commitDarkFloorText() }
+                            Text("lx")
+                                .font(.caption)
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                        pendingHint(isPending: darkFloorIsPending)
+                    }
+                    Spacer()
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                Text("밝기 0%에 맞는 최저 조도를 찾아 캘리브레이션합니다.")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Theme.textSecondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("평소 가장 어두운 환경에서 하얀 종이를 모니터 옆에 대세요.")
+                    Text("모니터 화면(흰 배경)이 종이와 비슷하거나 살짝 밝으면 최적입니다.")
+                    Text("너무 밝으면 이 값을 올리세요.")
+                }
+                .font(.caption2)
+                .foregroundStyle(Theme.textSecondary)
+                }
             }
         }
     }
@@ -313,7 +372,8 @@ struct SettingsWindow: View {
 
     private var aboutSection: some View {
         SettingsSection(title: "About", iconName: "info.circle") {
-            Text("Gnomon · v1.1.0")
+            let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+            Text("Gnomon · v\(version)")
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
         }
@@ -364,6 +424,16 @@ struct SettingsWindow: View {
         maxText = String(brightnessMax)
     }
 
+    private func commitDarkFloorText() {
+        let trimmed = darkFloorText.trimmingCharacters(in: .whitespaces)
+        if let value = Double(trimmed), value >= 0 {
+            darkFloorLux = value
+            darkFloorText = Self.formatInterval(value)
+        } else {
+            darkFloorText = Self.formatInterval(darkFloorLux)
+        }
+    }
+
     private func pushParameters() {
         let clampedMin = max(0, min(brightnessMin, brightnessMax - 1))
         let clampedMax = max(clampedMin + 1, min(brightnessMax, 100))
@@ -371,7 +441,7 @@ struct SettingsWindow: View {
             minBrightness: clampedMin,
             maxBrightness: clampedMax,
             luxCeiling: controller.parameters.luxCeiling,
-            darkFloorLux: controller.parameters.darkFloorLux
+            darkFloorLux: darkFloorLux
         )
     }
 
@@ -396,10 +466,25 @@ struct SettingsWindow: View {
 
 // MARK: - Container
 
-private struct SettingsSection<Content: View>: View {
+private struct SettingsSection<Trailing: View, Content: View>: View {
     let title: String
     let iconName: String
+    let trailing: Trailing
     @ViewBuilder var content: Content
+
+    init(title: String, iconName: String, @ViewBuilder trailing: () -> Trailing, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.iconName = iconName
+        self.trailing = trailing()
+        self.content = content()
+    }
+
+    init(title: String, iconName: String, @ViewBuilder content: () -> Content) where Trailing == EmptyView {
+        self.title = title
+        self.iconName = iconName
+        self.trailing = EmptyView()
+        self.content = content()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -409,6 +494,8 @@ private struct SettingsSection<Content: View>: View {
                 Text(title)
                     .font(.headline)
                     .foregroundStyle(Theme.textPrimary)
+                Spacer()
+                trailing
             }
             VStack(alignment: .leading, spacing: 10) {
                 content

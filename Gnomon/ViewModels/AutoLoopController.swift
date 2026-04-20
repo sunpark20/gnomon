@@ -12,6 +12,7 @@ import Observation
 
 @MainActor
 @Observable
+// swiftlint:disable:next type_body_length
 public final class AutoLoopController {
     // MARK: - Public state (UI bindings)
 
@@ -136,11 +137,20 @@ public final class AutoLoopController {
 
         let storedMin = defaults.object(forKey: "brightnessMin") as? Int
         let storedMax = defaults.object(forKey: "brightnessMax") as? Int
+        let storedFloor = defaults.object(forKey: "darkFloorLux") as? Double
         if let minValue = storedMin, let maxValue = storedMax, minValue < maxValue {
             parameters = BrightnessCurve.Parameters(
                 minBrightness: minValue,
                 maxBrightness: maxValue,
-                luxCeiling: parameters.luxCeiling
+                luxCeiling: parameters.luxCeiling,
+                darkFloorLux: storedFloor ?? parameters.darkFloorLux
+            )
+        } else if let floor = storedFloor {
+            parameters = BrightnessCurve.Parameters(
+                minBrightness: parameters.minBrightness,
+                maxBrightness: parameters.maxBrightness,
+                luxCeiling: parameters.luxCeiling,
+                darkFloorLux: floor
             )
         }
     }

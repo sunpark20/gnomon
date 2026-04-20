@@ -2,16 +2,8 @@
 //  HotkeyManager.swift
 //  Gnomon
 //
-//  Global hotkey dispatcher using NSEvent.addGlobalMonitorForEvents.
-//  Requires Accessibility permission (check AccessibilityChecker).
-//
-//  Default bindings (PRD §5.5, v0.6 revised):
-//    ⌃⌥⌘ = / -  : brightness ±5
-//    ⌃⌥⌘ ] / [  : contrast ±5
-//    ⌃⌥⌘ A     : toggle Auto
-//    ⌃⌥⌘ G     : toggle window
-//
-//  Users can rebind any action by double-clicking its row in Settings.
+//  Global hotkey dispatcher using Carbon RegisterEventHotKey.
+//  Does NOT require Accessibility permission.
 //
 
 import AppKit
@@ -209,8 +201,9 @@ public final class HotkeyManager {
 
     public private(set) var bindings: [HotkeyAction: KeyBinding]
 
-    private var globalMonitor: Any?
-    private var localMonitor: Any?
+    nonisolated(unsafe) static var active: HotkeyManager?
+    private var hotKeyRefs: [EventHotKeyRef] = []
+    private var eventHandlerRef: EventHandlerRef?
 
     public init() {
         bindings = HotkeyBindingStore.load()
@@ -218,23 +211,24 @@ public final class HotkeyManager {
 
     public func start() {
         stop()
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            Task { @MainActor in self?.handle(event) }
-        }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            Task { @MainActor in self?.handle(event) }
-            return event
+        HotkeyManager.active = self
+        installCarbonHandler()
+        for (action, binding) in bindings where !binding.isDisabled {
+            registerHotkey(action: action, binding: binding)
         }
     }
 
     public func stop() {
-        if let monitor = globalMonitor {
-            NSEvent.removeMonitor(monitor)
-            globalMonitor = nil
+        for ref in hotKeyRefs {
+            UnregisterEventHotKey(ref)
         }
-        if let monitor = localMonitor {
-            NSEvent.removeMonitor(monitor)
-            localMonitor = nil
+        hotKeyRefs.removeAll()
+        if let handler = eventHandlerRef {
+            RemoveEventHandler(handler)
+            eventHandlerRef = nil
+        }
+        if HotkeyManager.active === self {
+            HotkeyManager.active = nil
         }
     }
 
@@ -248,12 +242,13 @@ public final class HotkeyManager {
         bindings = KeyBinding.defaults
     }
 
-    private func handle(_ event: NSEvent) {
-        guard let action = mapAction(from: event) else { return }
-        onAction?(action)
+    func handleCarbonHotkey(id: UInt32) {
+        let index = Int(id)
+        let cases = HotkeyAction.allCases
+        guard index < cases.count else { return }
+        onAction?(cases[cases.index(cases.startIndex, offsetBy: index)])
     }
 
-    /// Matches the event against current user bindings.
     public func mapAction(from event: NSEvent) -> HotkeyAction? {
         let masked = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         for (action, binding) in bindings {
@@ -266,4 +261,70 @@ public final class HotkeyManager {
         }
         return nil
     }
+
+    // MARK: - Carbon
+
+    private func installCarbonHandler() {
+        var eventType = EventTypeSpec(
+            eventClass: UInt32(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+        InstallEventHandler(
+            GetApplicationEventTarget(),
+            carbonHotkeyCallback,
+            1,
+            &eventType,
+            nil,
+            &eventHandlerRef
+        )
+    }
+
+    private func registerHotkey(action: HotkeyAction, binding: KeyBinding) {
+        guard let index = HotkeyAction.allCases.firstIndex(of: action) else { return }
+        let hotKeyID = EventHotKeyID(signature: 0x474E_4F4D, id: UInt32(index))
+        var ref: EventHotKeyRef?
+        let status = RegisterEventHotKey(
+            UInt32(binding.keyCode),
+            Self.carbonModifiers(from: binding.modifiers),
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &ref
+        )
+        if status == noErr, let ref {
+            hotKeyRefs.append(ref)
+        }
+    }
+
+    static func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
+        var carbon: UInt32 = 0
+        if flags.contains(.command) { carbon |= UInt32(cmdKey) }
+        if flags.contains(.option) { carbon |= UInt32(optionKey) }
+        if flags.contains(.control) { carbon |= UInt32(controlKey) }
+        if flags.contains(.shift) { carbon |= UInt32(shiftKey) }
+        return carbon
+    }
+}
+
+private func carbonHotkeyCallback(
+    _: EventHandlerCallRef?,
+    _ event: EventRef?,
+    _: UnsafeMutableRawPointer?
+) -> OSStatus {
+    guard let event else { return OSStatus(eventNotHandledErr) }
+    var hotKeyID = EventHotKeyID()
+    let status = GetEventParameter(
+        event,
+        UInt32(kEventParamDirectObject),
+        UInt32(typeEventHotKeyID),
+        nil,
+        MemoryLayout<EventHotKeyID>.size,
+        nil,
+        &hotKeyID
+    )
+    guard status == noErr else { return status }
+    MainActor.assumeIsolated {
+        HotkeyManager.active?.handleCarbonHotkey(id: hotKeyID.id)
+    }
+    return noErr
 }

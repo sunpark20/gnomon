@@ -22,15 +22,15 @@ public enum BrightnessCurve {
         public var luxCeiling: Double
         /// Lux at or below which the sensor is treated as fully dark → returns minBrightness.
         /// macOS returns ~1–3 lux even with the sensor completely covered, so a strict
-        /// lux=0 floor never triggers the true minimum. 3 lux is the empirical covered-sensor
-        /// floor on Apple Silicon and still well below any lit-room reading.
+        /// Below this lux the curve returns b_min directly.
+        /// 15 lux covers dark-room / covered-sensor scenarios on Apple Silicon.
         public var darkFloorLux: Double
 
         public init(
-            minBrightness: Int = 20,
-            maxBrightness: Int = 95,
+            minBrightness: Int = 0,
+            maxBrightness: Int = 100,
             luxCeiling: Double = 2000,
-            darkFloorLux: Double = 3
+            darkFloorLux: Double = 15
         ) {
             self.minBrightness = minBrightness
             self.maxBrightness = maxBrightness

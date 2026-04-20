@@ -2,8 +2,8 @@
 //  M1DDCClient.swift
 //  Gnomon
 //
-//  Swift wrapper around the `m1ddc` CLI.
-//  Reference: https://github.com/waydabber/m1ddc
+//  DDC client using native IOAVService (Apple Silicon).
+//  No external binary dependency — replaces the old m1ddc shell-out.
 //
 
 import Foundation
@@ -11,43 +11,99 @@ import Foundation
 public struct M1DDCClient: Sendable {
     public enum ClientError: Error, LocalizedError {
         case displayNotFound(slot: Int)
-        case parseFailure(String)
+        case ddcReadFailed
+        case ddcWriteFailed
 
         public var errorDescription: String? {
             switch self {
             case let .displayNotFound(slot):
                 "Display at slot \(slot) not found"
-            case let .parseFailure(line):
-                "Could not parse m1ddc output: \(line)"
+            case .ddcReadFailed:
+                "DDC read failed — check monitor connection"
+            case .ddcWriteFailed:
+                "DDC write failed — check monitor connection"
             }
         }
     }
 
-    /// Default Homebrew install path on Apple Silicon.
-    public static let defaultPath = "/opt/homebrew/bin/m1ddc"
-
-    public let executablePath: String
-
-    public init(executablePath: String = M1DDCClient.defaultPath) {
-        self.executablePath = executablePath
-    }
+    public init() {}
 
     // MARK: - Discovery
 
-    /// Returns all DDC-addressable displays in the order m1ddc reports them.
-    ///
-    /// Sample m1ddc output line: `[1] LG HDR 4K (57E749D2-BBF2-4931-8EBC-6B9A3D4FF8A2)`
     public func listDisplays() async throws -> [MonitorID] {
-        let stdout = try await ProcessRunner.run(executablePath, args: ["display", "list"])
-        return Self.parseDisplayList(stdout)
+        let displays = await Task.detached {
+            NativeDDC.discoverDisplays()
+        }.value
+
+        return displays.enumerated().map { index, display in
+            MonitorID(
+                slot: index + 1,
+                displayName: display.name,
+                uuid: String(display.entryID)
+            )
+        }
     }
+
+    // MARK: - Brightness
+
+    public func getBrightness(on monitor: MonitorID) async throws -> Int {
+        let entryID = try entryID(for: monitor)
+        return try await Task.detached {
+            guard let value = NativeDDC.readVCP(.brightness, entryID: entryID) else {
+                throw ClientError.ddcReadFailed
+            }
+            return value
+        }.value
+    }
+
+    public func setBrightness(_ value: Int, on monitor: MonitorID) async throws {
+        let entryID = try entryID(for: monitor)
+        let clamped = min(max(value, 0), 100)
+        try await Task.detached {
+            guard NativeDDC.writeVCP(.brightness, value: clamped, entryID: entryID) else {
+                throw ClientError.ddcWriteFailed
+            }
+        }.value
+    }
+
+    // MARK: - Contrast
+
+    public func getContrast(on monitor: MonitorID) async throws -> Int {
+        let entryID = try entryID(for: monitor)
+        return try await Task.detached {
+            guard let value = NativeDDC.readVCP(.contrast, entryID: entryID) else {
+                throw ClientError.ddcReadFailed
+            }
+            return value
+        }.value
+    }
+
+    public func setContrast(_ value: Int, on monitor: MonitorID) async throws {
+        let entryID = try entryID(for: monitor)
+        let clamped = min(max(value, 0), 100)
+        try await Task.detached {
+            guard NativeDDC.writeVCP(.contrast, value: clamped, entryID: entryID) else {
+                throw ClientError.ddcWriteFailed
+            }
+        }.value
+    }
+
+    // MARK: - Internals
+
+    private func entryID(for monitor: MonitorID) throws -> UInt64 {
+        guard let id = UInt64(monitor.uuid) else {
+            throw ClientError.displayNotFound(slot: monitor.slot)
+        }
+        return id
+    }
+
+    // MARK: - Legacy CLI parser (kept for test backward compatibility)
 
     static func parseDisplayList(_ text: String) -> [MonitorID] {
         var monitors: [MonitorID] = []
         let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            // Expected shape: "[1] LG HDR 4K (UUID)"
             guard trimmed.hasPrefix("[") else { continue }
             guard let closeSlot = trimmed.firstIndex(of: "]") else { continue }
             let slotString = trimmed[trimmed.index(after: trimmed.startIndex) ..< closeSlot]
@@ -67,47 +123,5 @@ public struct M1DDCClient: Sendable {
             monitors.append(MonitorID(slot: slot, displayName: name, uuid: uuid))
         }
         return monitors
-    }
-
-    // MARK: - Brightness
-
-    public func getBrightness(on monitor: MonitorID) async throws -> Int {
-        try await getInt(property: "luminance", on: monitor)
-    }
-
-    public func setBrightness(_ value: Int, on monitor: MonitorID) async throws {
-        try await setInt(property: "luminance", value: value, on: monitor)
-    }
-
-    // MARK: - Contrast
-
-    public func getContrast(on monitor: MonitorID) async throws -> Int {
-        try await getInt(property: "contrast", on: monitor)
-    }
-
-    public func setContrast(_ value: Int, on monitor: MonitorID) async throws {
-        try await setInt(property: "contrast", value: value, on: monitor)
-    }
-
-    // MARK: - Internals
-
-    private func getInt(property: String, on monitor: MonitorID) async throws -> Int {
-        let stdout = try await ProcessRunner.run(
-            executablePath,
-            args: ["display", String(monitor.slot), "get", property]
-        )
-        let trimmed = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let value = Int(trimmed) else {
-            throw ClientError.parseFailure(trimmed)
-        }
-        return value
-    }
-
-    private func setInt(property: String, value: Int, on monitor: MonitorID) async throws {
-        let clamped = min(max(value, 0), 100)
-        _ = try await ProcessRunner.run(
-            executablePath,
-            args: ["display", String(monitor.slot), "set", property, String(clamped)]
-        )
     }
 }

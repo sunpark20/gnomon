@@ -54,11 +54,11 @@ run_check "SwiftLint" swiftlint --strict --quiet
 run_check "SwiftFormat (lint mode)" swiftformat --lint .
 
 # 3. Build
-run_check "xcodebuild build" bash -c "set -o pipefail; xcodebuild -project Gnomon.xcodeproj -scheme Gnomon -destination 'platform=macOS' -configuration Debug build 2>&1 | xcbeautify --quiet"
+run_check "xcodebuild build" bash -c "xcodebuild -project Gnomon.xcodeproj -scheme Gnomon -destination 'platform=macOS' -configuration Debug build 2>&1 | xcbeautify --quiet; exit \${PIPESTATUS[0]}"
 
 # 4. Tests (unless skipped)
 if [ "$SKIP_TESTS" -eq 0 ]; then
-    run_check "xcodebuild test" bash -c "set -o pipefail; xcodebuild -project Gnomon.xcodeproj -scheme Gnomon -destination 'platform=macOS' -configuration Debug test 2>&1 | xcbeautify --quiet"
+    run_check "xcodebuild test" bash -c "xcodebuild -project Gnomon.xcodeproj -scheme Gnomon -destination 'platform=macOS' -configuration Debug test 2>&1 | xcbeautify --quiet; exit \${PIPESTATUS[0]}"
 fi
 
 echo ""

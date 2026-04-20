@@ -16,6 +16,17 @@ public final class GnomonAppDelegate: NSObject, NSApplicationDelegate {
     private var toggleWindowObserver: NSObjectProtocol?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        if let bundleId = Bundle.main.bundleIdentifier {
+            let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
+            if running.count > 1 {
+                for app in running where app != .current {
+                    app.activate()
+                }
+                NSApp.terminate(nil)
+                return
+            }
+        }
+
         let controller = StatusBarController()
         statusBar = controller
         StatusBarProxy.shared.statusBarController = controller

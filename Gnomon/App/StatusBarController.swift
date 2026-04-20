@@ -41,9 +41,6 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
         menu.addItem(withTitle: "Show Window", action: #selector(StatusBarProxy.showWindow), keyEquivalent: "")
             .target = StatusBarProxy.shared
         menu.addItem(.separator())
-        menu.addItem(withTitle: "About Gnomon", action: #selector(StatusBarProxy.showAbout), keyEquivalent: "")
-            .target = StatusBarProxy.shared
-        menu.addItem(.separator())
         let quit = menu.addItem(
             withTitle: "Quit Gnomon",
             action: #selector(NSApplication.terminate(_:)),
@@ -75,7 +72,6 @@ public final class StatusBarProxy: NSObject {
     public static let shared = StatusBarProxy()
 
     public var onLeftClick: (() -> Void)?
-    public var onShowAbout: (() -> Void)?
     public weak var statusBarController: StatusBarController?
 
     override private init() {
@@ -95,11 +91,6 @@ public final class StatusBarProxy: NSObject {
     }
 
     @objc public func showWindow() {
-        onLeftClick?()
-    }
-
-    @objc public func showAbout() {
-        onShowAbout?()
-        NSApp.orderFrontStandardAboutPanel(nil)
+        WindowManager.shared.show()
     }
 }

@@ -44,10 +44,13 @@ struct MainWindow: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(20)
+                Spacer(minLength: 0)
             }
             .background(Theme.background)
-            .frame(minWidth: 960, minHeight: 720)
+            .frame(minWidth: 960)
+            .environment(\.controlActiveState, .active)
         }
     }
 
