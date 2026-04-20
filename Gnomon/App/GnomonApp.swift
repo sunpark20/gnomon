@@ -9,12 +9,16 @@ import SwiftUI
 
 @main
 struct GnomonApp: App {
+    @NSApplicationDelegateAdaptor(GnomonAppDelegate.self) private var appDelegate
     @State private var controller = AutoLoopController()
     @State private var hotkeys = HotkeyManager()
 
     var body: some Scene {
         WindowGroup {
             MainWindow(controller: controller)
+                .background(WindowAccessor { window in
+                    WindowManager.shared.register(window)
+                })
                 .task {
                     await controller.start()
                     wireHotkeys()
