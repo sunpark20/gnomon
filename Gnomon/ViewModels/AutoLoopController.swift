@@ -72,6 +72,11 @@ public final class AutoLoopController {
     // MARK: - Lifecycle
 
     public func start() async {
+        // Pull persisted user preferences BEFORE the sync loop starts,
+        // so saved values (interval, bMin/bMax) take effect immediately
+        // rather than waiting for the user to reopen Settings.
+        loadPersistedPreferences()
+
         do {
             let monitors = try await ddcClient.listDisplays()
             activeMonitor = monitors.first(where: { !$0.uuid.isEmpty })
@@ -106,6 +111,28 @@ public final class AutoLoopController {
         syncTask?.cancel()
         sampleTask = nil
         syncTask = nil
+    }
+
+    /// Reads UserDefaults values that Settings writes via @AppStorage and
+    /// applies them to the controller. Called on every launch so the user's
+    /// saved interval / range actually takes effect without opening Settings.
+    private func loadPersistedPreferences() {
+        let defaults = UserDefaults.standard
+
+        if defaults.object(forKey: "syncIntervalSeconds") != nil {
+            let stored = defaults.double(forKey: "syncIntervalSeconds")
+            if stored > 0 { syncInterval = stored }
+        }
+
+        let storedMin = defaults.object(forKey: "brightnessMin") as? Int
+        let storedMax = defaults.object(forKey: "brightnessMax") as? Int
+        if let minValue = storedMin, let maxValue = storedMax, minValue < maxValue {
+            parameters = BrightnessCurve.Parameters(
+                minBrightness: minValue,
+                maxBrightness: maxValue,
+                luxCeiling: parameters.luxCeiling
+            )
+        }
     }
 
     // MARK: - Sampling (fast loop, UI only)
