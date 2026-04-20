@@ -67,6 +67,14 @@ struct BrightnessCard: View {
                     .frame(width: 80)
                     .font(.system(size: 32, weight: .heavy))
                     .onSubmit { commitEditedValue() }
+                    .onChange(of: editText) { _, newValue in
+                        // Auto-commit when the user types a 2-digit value (10–99).
+                        // 1-digit or 100 still needs Enter to avoid premature commit.
+                        if newValue.count == 2, let value = Int(newValue), (10 ... 99).contains(value) {
+                            controller.userSetBrightness(value)
+                            isEditingNumber = false
+                        }
+                    }
             } else {
                 Text("\(current)")
                     .font(.system(size: 56, weight: .heavy))

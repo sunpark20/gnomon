@@ -57,6 +57,7 @@ open build/Build/Products/Debug/Gnomon.app
 | v1.1.5 | Settings 창 기본 크기 460×740 → 480×1080 (완전 펼침) |
 | v1.1.6 | Toggle Window 핫키가 메인+설정창 동시 토글 |
 | v1.1.7 | SystemInfo 수집 (macOS/모델/메모리) → `system.txt` 기록, "MacBook Sensor" → "Mac Sensor", `→ 83 tgt` → `→ 83%` |
+| v1.1.8 | 인라인 밝기/대비 입력에서 **2자리 숫자 자동 커밋** (10-99). 1자리나 100은 Enter 필요 |
 
 ---
 

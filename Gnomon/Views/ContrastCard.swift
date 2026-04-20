@@ -48,6 +48,12 @@ struct ContrastCard: View {
                     .frame(width: 80)
                     .font(.system(size: 32, weight: .heavy))
                     .onSubmit { commit() }
+                    .onChange(of: editText) { _, newValue in
+                        if newValue.count == 2, let value = Int(newValue), (10 ... 99).contains(value) {
+                            controller.userSetContrast(value)
+                            isEditingNumber = false
+                        }
+                    }
             } else {
                 Text("\(controller.contrast)")
                     .font(.system(size: 48, weight: .heavy))
