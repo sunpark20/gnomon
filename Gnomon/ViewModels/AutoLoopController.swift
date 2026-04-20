@@ -32,6 +32,7 @@ public final class AutoLoopController {
 
     private let luxReader: LuxReader
     private let ddcClient: M1DDCClient
+    private let logger: CSVLogger
 
     // MARK: - Private state
 
@@ -49,10 +50,12 @@ public final class AutoLoopController {
 
     public init(
         luxReader: LuxReader = LuxReader(),
-        ddcClient: M1DDCClient = M1DDCClient()
+        ddcClient: M1DDCClient = M1DDCClient(),
+        logger: CSVLogger = CSVLogger()
     ) {
         self.luxReader = luxReader
         self.ddcClient = ddcClient
+        self.logger = logger
     }
 
     // MARK: - Lifecycle
@@ -69,6 +72,11 @@ public final class AutoLoopController {
             }
         } catch {
             print("[AutoLoop] start: discovery failed: \(error.localizedDescription)")
+        }
+
+        // Prune old log rows once at startup. Ignore errors — logging is non-critical.
+        Task.detached { [logger] in
+            try? await logger.rotate()
         }
 
         nextSyncAt = Date().addingTimeInterval(syncInterval)
@@ -142,9 +150,23 @@ public final class AutoLoopController {
             lastSentBrightness = target
             lastSyncAt = Date()
             print("[sync] lux=\(Int(currentLux)) ema=\(Int(emaLux)) target=\(target) sent=\(target)")
+            await logEntry(sentBrightness: target, manualOverride: false)
         } catch {
             print("[sync] DDC error: \(error.localizedDescription)")
         }
+    }
+
+    private func logEntry(sentBrightness: Int, manualOverride: Bool) async {
+        let entry = CSVLogEntry(
+            rawLux: currentLux,
+            emaLux: emaLux,
+            targetBrightness: targetBrightness,
+            sentBrightness: sentBrightness,
+            contrast: contrast,
+            autoOn: autoEnabled,
+            manualOverride: manualOverride
+        )
+        try? await logger.append(entry)
     }
 
     // MARK: - User interactions (Phase 4)
@@ -163,6 +185,7 @@ public final class AutoLoopController {
             do {
                 try await client.setBrightness(clamped, on: monitor)
                 self?.lastSyncAt = Date()
+                await self?.logEntry(sentBrightness: clamped, manualOverride: true)
             } catch {
                 print("[manual] DDC error: \(error.localizedDescription)")
             }
