@@ -28,12 +28,8 @@ struct MainWindow: View {
                     .frame(width: 280)
 
                     VStack(spacing: 20) {
-                        BrightnessCard(
-                            current: controller.lastSentBrightness ?? controller.targetBrightness,
-                            target: controller.targetBrightness,
-                            autoEnabled: controller.autoEnabled
-                        )
-                        ContrastCard(value: 70)
+                        BrightnessCard(controller: controller)
+                        ContrastCard(value: controller.contrast)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -42,8 +38,8 @@ struct MainWindow: View {
                 StatusBar(
                     nextSyncSecondsRemaining: secondsUntilNextSync,
                     isPaused: controller.isPaused,
-                    onPauseToggle: { controller.isPaused.toggle() },
-                    onApplyNow: {}
+                    onPauseToggle: { controller.togglePause() },
+                    onApplyNow: { controller.applyNow() }
                 )
             }
             .background(Theme.background)

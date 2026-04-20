@@ -40,6 +40,9 @@ public final class AutoLoopController {
     private var syncTask: Task<Void, Never>?
     private let deadband = 2 // PRD §5.3
     private let sampleInterval: TimeInterval = 1.0
+    private let manualWriteDebouncer = Debouncer(delay: .milliseconds(200))
+    public private(set) var manualOverrideAt: Date?
+    public private(set) var contrast = 70 // PRD §5.2.2 fixed default (LG factory)
 
     // MARK: - Init
 
@@ -138,5 +141,61 @@ public final class AutoLoopController {
         } catch {
             print("[sync] DDC error: \(error.localizedDescription)")
         }
+    }
+
+    // MARK: - User interactions (Phase 4)
+
+    /// Called when the user drags a brightness slider or enters a value.
+    /// Turns Auto off and schedules a debounced DDC write.
+    public func userSetBrightness(_ value: Int) {
+        let clamped = max(0, min(100, value))
+        autoEnabled = false
+        manualOverrideAt = Date()
+        lastSentBrightness = clamped
+        targetBrightness = clamped
+        guard let monitor = activeMonitor else { return }
+        let client = ddcClient
+        manualWriteDebouncer.schedule { [weak self] in
+            do {
+                try await client.setBrightness(clamped, on: monitor)
+                self?.lastSyncAt = Date()
+            } catch {
+                print("[manual] DDC error: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Re-enables Auto after user had nudged things manually.
+    /// Next sync tick will recompute target and write if it differs.
+    public func resumeAuto() {
+        autoEnabled = true
+        manualOverrideAt = nil
+    }
+
+    /// Toggles Auto on/off.
+    public func toggleAuto() {
+        autoEnabled.toggle()
+        if autoEnabled { manualOverrideAt = nil }
+    }
+
+    /// Writes the current computed target immediately, ignoring the deadband.
+    public func applyNow() {
+        guard let monitor = activeMonitor else { return }
+        let target = targetBrightness
+        let client = ddcClient
+        Task { [weak self] in
+            do {
+                try await client.setBrightness(target, on: monitor)
+                self?.lastSentBrightness = target
+                self?.lastSyncAt = Date()
+            } catch {
+                print("[applyNow] DDC error: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Toggles the pause state. Pause stops both DDC writes and target recomputation.
+    public func togglePause() {
+        isPaused.toggle()
     }
 }
