@@ -45,7 +45,7 @@ struct MainWindow: View {
                 )
             }
             .background(Theme.background)
-            .frame(minWidth: 820, minHeight: 520)
+            .frame(minWidth: 960, minHeight: 720)
             .onChange(of: category) { _, newCategory in
                 if newCategory != lastCategory {
                     lastCategory = newCategory

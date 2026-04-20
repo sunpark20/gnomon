@@ -217,7 +217,7 @@ struct SettingsWindow: View {
         if syncIntervalSeconds > 3600 {
             return "당신은 영생을 사는 존재이십니까? 이렇게 느리게 리프레쉬 되도 정말 괜찮아요?"
         }
-        return "소수점 OK (예: 0.5). 상한 없음 — 하드웨어와 DDC 내성이 유일한 제약."
+        return "소수점도 OK (예: 0.5초). 제한 없음."
     }
 
     private var intervalTipColor: Color {

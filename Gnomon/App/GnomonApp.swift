@@ -36,7 +36,7 @@ struct GnomonApp: App {
             }
         }
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 840, height: 540)
+        .defaultSize(width: 1000, height: 780)
 
         Window("Gnomon Settings", id: "settings") {
             SettingsWindow(controller: controller)
