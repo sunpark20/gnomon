@@ -2,61 +2,97 @@
 //  ContrastCard.swift
 //  Gnomon
 //
-//  Manual-only contrast slider (PRD §5.2.2). No Auto toggle.
+//  Phase 5 interactive manual-only contrast slider (PRD §5.2.2).
 //
 
 import SwiftUI
 
 struct ContrastCard: View {
-    let value: Int
+    @Bindable var controller: AutoLoopController
+    @State private var isEditingNumber = false
+    @State private var editText = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 8) {
-                Image(systemName: "circle.righthalf.filled")
-                    .foregroundStyle(Theme.gold)
-                Text("Contrast")
-                    .font(.headline)
-                    .foregroundStyle(Theme.textPrimary)
-                Spacer()
-                Text("Manual")
-                    .font(.caption)
-                    .foregroundStyle(Theme.textSecondary)
-            }
-
-            HStack(alignment: .lastTextBaseline, spacing: 6) {
-                Text("\(value)")
-                    .font(.system(size: 48, weight: .heavy))
-                    .foregroundStyle(Theme.textPrimary)
-                Text("%")
-                    .font(.title3)
-                    .foregroundStyle(Theme.textSecondary)
-            }
-
-            Slider(value: .constant(Double(value)), in: 0 ... 100)
-                .tint(Theme.gold)
-                .disabled(true)
-
-            HStack {
-                Text("Min").font(.caption2).foregroundStyle(Theme.textSecondary)
-                Spacer()
-                Text("Max").font(.caption2).foregroundStyle(Theme.textSecondary)
-            }
-
-            Text("Adjust tonal dynamic range. Factory default suggested.")
-                .font(.caption)
-                .foregroundStyle(Theme.textSecondary)
+            header
+            valueRow
+            slider
+            rangeLabels
+            subtitle
         }
         .padding(24)
         .frame(minHeight: 200)
         .background(Theme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20))
     }
-}
 
-#Preview {
-    ContrastCard(value: 70)
-        .padding()
-        .frame(width: 500)
-        .background(Theme.background)
+    private var header: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "circle.righthalf.filled")
+                .foregroundStyle(Theme.gold)
+            Text("Contrast")
+                .font(.headline)
+                .foregroundStyle(Theme.textPrimary)
+            Spacer()
+            Text("Manual")
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+        }
+    }
+
+    private var valueRow: some View {
+        HStack(alignment: .lastTextBaseline, spacing: 6) {
+            if isEditingNumber {
+                TextField("0–100", text: $editText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 80)
+                    .font(.system(size: 32, weight: .heavy))
+                    .onSubmit { commit() }
+            } else {
+                Text("\(controller.contrast)")
+                    .font(.system(size: 48, weight: .heavy))
+                    .foregroundStyle(Theme.textPrimary)
+                    .onTapGesture {
+                        editText = String(controller.contrast)
+                        isEditingNumber = true
+                    }
+            }
+            Text("%")
+                .font(.title3)
+                .foregroundStyle(Theme.textSecondary)
+        }
+    }
+
+    private var slider: some View {
+        Slider(
+            value: Binding(
+                get: { Double(controller.contrast) },
+                set: { controller.userSetContrast(Int($0)) }
+            ),
+            in: 0 ... 100,
+            step: 1
+        )
+        .tint(Theme.gold)
+    }
+
+    private var rangeLabels: some View {
+        HStack {
+            Text("Min").font(.caption2).foregroundStyle(Theme.textSecondary)
+            Spacer()
+            Text("Max").font(.caption2).foregroundStyle(Theme.textSecondary)
+        }
+    }
+
+    private var subtitle: some View {
+        Text("Adjust tonal dynamic range. Factory default suggested.")
+            .font(.caption)
+            .foregroundStyle(Theme.textSecondary)
+    }
+
+    private func commit() {
+        if let value = Int(editText) {
+            controller.userSetContrast(value)
+        }
+        isEditingNumber = false
+    }
 }

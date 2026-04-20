@@ -41,8 +41,9 @@ public final class AutoLoopController {
     private let deadband = 2 // PRD §5.3
     private let sampleInterval: TimeInterval = 1.0
     private let manualWriteDebouncer = Debouncer(delay: .milliseconds(200))
+    private let contrastWriteDebouncer = Debouncer(delay: .milliseconds(200))
     public private(set) var manualOverrideAt: Date?
-    public private(set) var contrast = 70 // PRD §5.2.2 fixed default (LG factory)
+    public var contrast = 70 // PRD §5.2.2 fixed default (LG factory)
 
     // MARK: - Init
 
@@ -62,6 +63,9 @@ public final class AutoLoopController {
             activeMonitor = monitors.first(where: { !$0.uuid.isEmpty })
             if let monitor = activeMonitor {
                 lastSentBrightness = try? await ddcClient.getBrightness(on: monitor)
+                if let existingContrast = try? await ddcClient.getContrast(on: monitor) {
+                    contrast = existingContrast
+                }
             }
         } catch {
             print("[AutoLoop] start: discovery failed: \(error.localizedDescription)")
@@ -197,5 +201,20 @@ public final class AutoLoopController {
     /// Toggles the pause state. Pause stops both DDC writes and target recomputation.
     public func togglePause() {
         isPaused.toggle()
+    }
+
+    /// Manual contrast change (PRD §5.2.2 — not driven by ambient light).
+    public func userSetContrast(_ value: Int) {
+        let clamped = max(0, min(100, value))
+        contrast = clamped
+        guard let monitor = activeMonitor else { return }
+        let client = ddcClient
+        contrastWriteDebouncer.schedule {
+            do {
+                try await client.setContrast(clamped, on: monitor)
+            } catch {
+                print("[contrast] DDC error: \(error.localizedDescription)")
+            }
+        }
     }
 }

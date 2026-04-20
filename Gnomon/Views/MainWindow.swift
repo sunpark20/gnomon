@@ -29,7 +29,7 @@ struct MainWindow: View {
 
                     VStack(spacing: 20) {
                         BrightnessCard(controller: controller)
-                        ContrastCard(value: controller.contrast)
+                        ContrastCard(controller: controller)
                     }
                     .frame(maxWidth: .infinity)
                 }
