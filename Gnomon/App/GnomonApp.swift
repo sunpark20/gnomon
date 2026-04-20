@@ -21,7 +21,7 @@ struct GnomonApp: App {
                 if onboardingCompletedAt > 0 {
                     MainWindow(controller: controller)
                         .background(WindowAccessor { window in
-                            WindowManager.shared.register(window)
+                            WindowManager.shared.register(window, id: .main)
                         })
                         .background(FrameAutosave(name: "GnomonMainWindow"))
                         .task {
@@ -40,6 +40,9 @@ struct GnomonApp: App {
 
         Window("Gnomon Settings", id: "settings") {
             SettingsWindow(controller: controller)
+                .background(WindowAccessor { window in
+                    WindowManager.shared.register(window, id: .settings)
+                })
                 .background(FrameAutosave(name: "GnomonSettingsWindow.v2"))
         }
         .windowResizability(.contentSize)
