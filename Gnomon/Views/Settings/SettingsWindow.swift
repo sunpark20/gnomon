@@ -164,9 +164,10 @@ struct SettingsWindow: View {
                 }
                 Spacer()
             }
-            Text("Decimals OK (e.g. 0.5). No upper limit — hardware and DDC tolerance are the only constraints.")
+            Text(intervalTip)
                 .font(.caption2)
-                .foregroundStyle(Theme.textSecondary)
+                .foregroundStyle(intervalTipColor)
+                .italic(syncIntervalSeconds < 1 || syncIntervalSeconds > 3600)
 
             HStack {
                 Text("Active Monitor").font(.callout).foregroundStyle(Theme.textPrimary)
@@ -208,6 +209,23 @@ struct SettingsWindow: View {
     }
 
     // MARK: - Helpers
+
+    private var intervalTip: String {
+        if syncIntervalSeconds < 1 {
+            return "여기 클럽인가요?? 모니터가 고장나도 책임지지 않아요."
+        }
+        if syncIntervalSeconds > 3600 {
+            return "당신은 영생을 사는 존재이십니까? 이렇게 느리게 리프레쉬 되도 정말 괜찮아요?"
+        }
+        return "소수점 OK (예: 0.5). 상한 없음 — 하드웨어와 DDC 내성이 유일한 제약."
+    }
+
+    private var intervalTipColor: Color {
+        if syncIntervalSeconds < 1 || syncIntervalSeconds > 3600 {
+            return Theme.gold
+        }
+        return Theme.textSecondary
+    }
 
     private func commitIntervalText() {
         let trimmed = intervalText.trimmingCharacters(in: .whitespaces)
