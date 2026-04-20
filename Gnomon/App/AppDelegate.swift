@@ -12,6 +12,7 @@ import Foundation
 @MainActor
 public final class GnomonAppDelegate: NSObject, NSApplicationDelegate {
     public private(set) var statusBar: StatusBarController?
+    public private(set) var iconUpdater: IconUpdater?
     private var toggleWindowObserver: NSObjectProtocol?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
@@ -23,6 +24,11 @@ public final class GnomonAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.setActivationPolicy(.accessory)
+
+        let updater = IconUpdater()
+        updater.statusItem = controller.rawItem
+        updater.start()
+        iconUpdater = updater
 
         toggleWindowObserver = NotificationCenter.default.addObserver(
             forName: .gnomonToggleWindow,

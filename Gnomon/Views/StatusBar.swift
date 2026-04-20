@@ -40,7 +40,8 @@ struct StatusBar: View {
         }
         .buttonStyle(.bordered)
         .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .padding(.top, 12)
+        .padding(.bottom, 18)
         .background(Theme.background.opacity(0.6))
     }
 }

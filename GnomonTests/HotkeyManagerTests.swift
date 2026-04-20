@@ -27,37 +27,62 @@ final class HotkeyManagerTests: XCTestCase {
 
     private let required: NSEvent.ModifierFlags = [.control, .option, .command]
 
-    func testBrightnessUpMapping() throws {
-        let event = try XCTUnwrap(makeEvent(keyCode: kVK_UpArrow, modifiers: required))
-        XCTAssertEqual(HotkeyManager.mapAction(from: event), .brightnessUp)
+    override func setUp() {
+        super.setUp()
+        HotkeyBindingStore.reset()
     }
 
-    func testBrightnessDownMapping() throws {
-        let event = try XCTUnwrap(makeEvent(keyCode: kVK_DownArrow, modifiers: required))
-        XCTAssertEqual(HotkeyManager.mapAction(from: event), .brightnessDown)
+    func testDefaultBrightnessMapping() throws {
+        let manager = HotkeyManager()
+        let up = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_Equal, modifiers: required))
+        XCTAssertEqual(manager.mapAction(from: up), .brightnessUp)
+        let down = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_Minus, modifiers: required))
+        XCTAssertEqual(manager.mapAction(from: down), .brightnessDown)
     }
 
-    func testContrastMapping() throws {
-        let right = try XCTUnwrap(makeEvent(keyCode: kVK_RightArrow, modifiers: required))
-        XCTAssertEqual(HotkeyManager.mapAction(from: right), .contrastUp)
-        let left = try XCTUnwrap(makeEvent(keyCode: kVK_LeftArrow, modifiers: required))
-        XCTAssertEqual(HotkeyManager.mapAction(from: left), .contrastDown)
+    func testDefaultContrastMapping() throws {
+        let manager = HotkeyManager()
+        let up = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_RightBracket, modifiers: required))
+        XCTAssertEqual(manager.mapAction(from: up), .contrastUp)
+        let down = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_LeftBracket, modifiers: required))
+        XCTAssertEqual(manager.mapAction(from: down), .contrastDown)
     }
 
-    func testLetterMappings() throws {
-        let eventA = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_A, modifiers: required))
-        XCTAssertEqual(HotkeyManager.mapAction(from: eventA), .toggleAuto)
-        let eventW = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_W, modifiers: required))
-        XCTAssertEqual(HotkeyManager.mapAction(from: eventW), .toggleWindow)
+    func testDefaultTogglesMapping() throws {
+        let manager = HotkeyManager()
+        let auto = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_B, modifiers: required))
+        XCTAssertEqual(manager.mapAction(from: auto), .toggleAuto)
+        let window = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_G, modifiers: required))
+        XCTAssertEqual(manager.mapAction(from: window), .toggleWindow)
     }
 
     func testMissingModifiersAreIgnored() throws {
-        let event = try XCTUnwrap(makeEvent(keyCode: kVK_UpArrow, modifiers: [.control, .command]))
-        XCTAssertNil(HotkeyManager.mapAction(from: event))
+        let manager = HotkeyManager()
+        let event = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_Equal, modifiers: [.control, .command]))
+        XCTAssertNil(manager.mapAction(from: event))
     }
 
     func testUnmappedKeyReturnsNil() throws {
+        let manager = HotkeyManager()
         let event = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_X, modifiers: required))
-        XCTAssertNil(HotkeyManager.mapAction(from: event))
+        XCTAssertNil(manager.mapAction(from: event))
+    }
+
+    func testCustomBindingOverridesDefault() throws {
+        let manager = HotkeyManager()
+        let newBinding = KeyBinding(modifiers: required, keyCode: UInt16(kVK_ANSI_X))
+        manager.setBinding(newBinding, for: .brightnessUp)
+
+        let event = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_X, modifiers: required))
+        XCTAssertEqual(manager.mapAction(from: event), .brightnessUp)
+
+        // Old default for brightnessUp (=) should no longer trigger it.
+        let oldDefault = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_Equal, modifiers: required))
+        XCTAssertNotEqual(manager.mapAction(from: oldDefault), .brightnessUp)
+    }
+
+    func testHumanReadableFormat() {
+        let binding = KeyBinding(modifiers: [.control, .option, .command], keyCode: UInt16(kVK_ANSI_Equal))
+        XCTAssertEqual(binding.humanReadable, "⌃ ⌥ ⌘ =")
     }
 }

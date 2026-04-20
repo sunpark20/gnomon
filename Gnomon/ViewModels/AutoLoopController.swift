@@ -23,7 +23,18 @@ public final class AutoLoopController {
     public private(set) var nextSyncAt: Date?
     public private(set) var activeMonitor: MonitorID?
 
-    public var autoEnabled = true
+    public var autoEnabled = true {
+        didSet {
+            if autoEnabled != oldValue {
+                NotificationCenter.default.post(
+                    name: .gnomonAutoStateChanged,
+                    object: nil,
+                    userInfo: ["enabled": autoEnabled]
+                )
+            }
+        }
+    }
+
     public var isPaused = false
     public var parameters: BrightnessCurve.Parameters = .default
     public var syncInterval: TimeInterval = 30

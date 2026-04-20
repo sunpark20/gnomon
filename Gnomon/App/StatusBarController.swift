@@ -19,8 +19,13 @@ public final class StatusBarController {
         buildMenu()
     }
 
+    public var rawItem: NSStatusItem {
+        statusItem
+    }
+
     private func configureButton() {
         guard let button = statusItem.button else { return }
+        // Initial placeholder — IconUpdater will render the real sundial.
         let image = NSImage(systemSymbolName: "sun.max.fill", accessibilityDescription: "Gnomon")
         image?.isTemplate = true
         button.image = image

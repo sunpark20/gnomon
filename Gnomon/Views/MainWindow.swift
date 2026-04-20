@@ -47,11 +47,14 @@ struct MainWindow: View {
             .background(Theme.background)
             .frame(minWidth: 820, minHeight: 520)
             .onChange(of: category) { _, newCategory in
-                // Reseed the phrase only when the category changes, to avoid flicker.
                 if newCategory != lastCategory {
                     lastCategory = newCategory
                     phraseSeed = Int.random(in: 0 ..< 1000)
                 }
+            }
+            .onChange(of: controller.lastSyncAt) { _, _ in
+                // Fresh phrase on every DDC sync — keeps the app feeling alive.
+                phraseSeed = Int.random(in: 0 ..< 1000)
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsWindow(controller: controller, isPresented: $showingSettings)
@@ -61,18 +64,19 @@ struct MainWindow: View {
 
     private var topBar: some View {
         HStack {
-            Text("Gnomon")
-                .font(.headline)
-                .foregroundStyle(Theme.textPrimary)
             Spacer()
             Button(action: { showingSettings = true }, label: {
                 Image(systemName: "gearshape.fill")
+                    .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(Theme.gold)
+                    .contentShape(Rectangle())
             })
             .buttonStyle(.plain)
+            .help("Settings")
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.top, 16)
+        .padding(.bottom, 4)
     }
 
     private var secondsUntilNextSync: Int {

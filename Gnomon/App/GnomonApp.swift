@@ -58,9 +58,23 @@ struct GnomonApp: App {
             }
         }
         hotkeys.start()
+
+        NotificationCenter.default.addObserver(
+            forName: .gnomonHotkeysChanged,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                hotkeys.stop()
+                hotkeys = HotkeyManager()
+                wireHotkeys()
+            }
+        }
     }
 }
 
 extension Notification.Name {
     static let gnomonToggleWindow = Notification.Name("com.sunguk.gnomon.toggleWindow")
+    static let gnomonAutoStateChanged = Notification.Name("com.sunguk.gnomon.autoStateChanged")
+    static let gnomonHotkeysChanged = Notification.Name("com.sunguk.gnomon.hotkeysChanged")
 }

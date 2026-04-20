@@ -14,12 +14,16 @@ struct AmbientSensorCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 8) {
-                Image(systemName: "sun.max.fill")
-                    .foregroundStyle(Theme.gold)
-                Text("Ambient Sensor")
-                    .font(.headline)
-                    .foregroundStyle(Theme.textPrimary)
+            HStack(spacing: 10) {
+                macBookBadge
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("MacBook Sensor")
+                        .font(.headline)
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("내장 조도센서 (Ambient Light)")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.textSecondary)
+                }
             }
 
             Spacer(minLength: 0)
@@ -77,6 +81,31 @@ struct AmbientSensorCard: View {
 
     private var formattedLux: String {
         String(format: "%.0f", max(0, lux))
+    }
+
+    /// Stylised MacBook silhouette with a glowing dot at the sensor location
+    /// (top-center of the lid, where the camera module sits).
+    private var macBookBadge: some View {
+        ZStack(alignment: .top) {
+            Image(systemName: "laptopcomputer")
+                .font(.system(size: 26))
+                .foregroundStyle(Theme.textPrimary)
+            Circle()
+                .fill(Theme.gold)
+                .frame(width: 5, height: 5)
+                .shadow(color: Theme.gold.opacity(0.9), radius: 4)
+                .shadow(color: Theme.gold.opacity(0.6), radius: 10)
+                .offset(y: 3)
+                .opacity(0.4 + min(1, pulseIntensity) * 0.6)
+                .animation(.easeInOut(duration: 1.6).repeatForever(), value: pulseIntensity)
+        }
+        .frame(width: 36, height: 28)
+    }
+
+    /// Pulse intensity mapped to lux so the sensor dot glows brighter when the
+    /// sensor is actually reading a strong signal — tiny but satisfying.
+    private var pulseIntensity: Double {
+        min(1, log10(max(1, lux)) / log10(2001))
     }
 
     private var gaugeFraction: Double {
