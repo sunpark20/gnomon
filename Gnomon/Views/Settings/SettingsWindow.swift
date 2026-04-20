@@ -188,11 +188,6 @@ struct SettingsWindow: View {
                 .buttonStyle(.borderless)
                 .foregroundStyle(Theme.gold)
                 Spacer()
-                Button("Quit Gnomon") {
-                    NSApp.terminate(nil)
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.red)
             }
         }
     }
