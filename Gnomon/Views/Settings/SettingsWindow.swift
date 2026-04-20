@@ -366,6 +366,17 @@ struct SettingsWindow: View {
                 .buttonStyle(.plain)
                 .help(emailCopied ? "Copied!" : "Click to copy")
                 Spacer()
+                Button(action: {
+                    if let url = URL(string: "https://ninjaturtle.win/#gnomon") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }, label: {
+                    Image(systemName: "house")
+                        .font(.caption)
+                        .foregroundStyle(Theme.gold)
+                })
+                .buttonStyle(.plain)
+                .help("Homepage")
             }
         }
     }

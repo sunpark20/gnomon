@@ -2,13 +2,16 @@
 //  WindowManager.swift
 //  Gnomon
 //
-//  Tracks all Gnomon NSWindows (main + settings). The Toggle Window hotkey
-//  hides every currently-visible Gnomon window and brings back whichever
-//  windows were visible the last time toggle was fired — so if the user had
-//  Settings open alongside Main, both re-appear together.
+//  Tracks all Gnomon NSWindows (main + settings).
+//
+//  Cmd+W is intercepted to hide (orderOut) instead of close, keeping the
+//  window alive for instant re-show. If the user clicks the traffic-light
+//  close button, SwiftUI fully destroys the window; in that case we
+//  trigger "File > New Gnomon Window" to let SwiftUI recreate it.
 //
 
 import AppKit
+import Carbon.HIToolbox
 import Foundation
 
 @MainActor
@@ -26,50 +29,59 @@ public final class WindowManager {
     }
 
     private var entries: [WindowID: Entry] = [:]
+    private var cmdWMonitor: Any?
 
     public func register(_ window: NSWindow, id: WindowID) {
         window.isReleasedWhenClosed = false
         entries[id] = Entry(window: window, wasVisible: window.isVisible)
+        installCmdWMonitor()
     }
 
-    // MARK: - Main-only legacy helpers
+    private func installCmdWMonitor() {
+        guard cmdWMonitor == nil else { return }
+        cmdWMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.modifierFlags.contains(.command),
+                  event.keyCode == UInt16(kVK_ANSI_W) else { return event }
+            event.window?.orderOut(nil)
+            return nil
+        }
+    }
 
-    /// Legacy. Kept for callers that don't need multi-window logic.
     public func toggle() {
         toggleAll()
     }
 
     public func show() {
         bringAppForward()
-        entries[.main]?.window?.makeKeyAndOrderFront(nil)
+        if let w = entries[.main]?.window {
+            w.makeKeyAndOrderFront(nil)
+        } else {
+            reopenViaSwiftUI()
+        }
     }
 
     public func hide() {
         entries[.main]?.window?.orderOut(nil)
     }
 
-    // MARK: - Multi-window toggle
-
-    /// If any Gnomon window is currently visible, hide them all.
-    /// If none are visible, show whichever windows were visible at the
-    /// previous hide — defaulting to main if nothing was remembered.
     public func toggleAll() {
-        let anyVisible = entries.values.contains { $0.window?.isVisible == true }
-        if anyVisible {
+        let tracked = entries.values.compactMap(\.window)
+        let visible = tracked.filter(\.isVisible)
+        if !visible.isEmpty {
             hideAll()
-        } else {
+        } else if !tracked.isEmpty {
             showRememberedOrMain()
+        } else {
+            bringAppForward()
+            reopenViaSwiftUI()
         }
     }
 
     private func hideAll() {
         for (key, entry) in entries {
             guard let window = entry.window else { continue }
-            // Snapshot current visibility before we hide.
-            entries[key] = Entry(window: window, wasVisible: window.isVisible)
-            if window.isVisible {
-                window.orderOut(nil)
-            }
+            entries[key]?.wasVisible = window.isVisible
+            if window.isVisible { window.orderOut(nil) }
         }
     }
 
@@ -83,6 +95,14 @@ public final class WindowManager {
         }
         if !shownAny {
             entries[.main]?.window?.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    private func reopenViaSwiftUI() {
+        guard let fileMenu = NSApp.mainMenu?.item(withTitle: "File")?.submenu else { return }
+        for item in fileMenu.items where item.title.contains("New") && item.title.contains("Gnomon") {
+            _ = item.target?.perform(item.action, with: item)
+            return
         }
     }
 
