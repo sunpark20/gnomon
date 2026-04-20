@@ -40,10 +40,10 @@ struct GnomonApp: App {
 
         Window("Gnomon Settings", id: "settings") {
             SettingsWindow(controller: controller)
-                .background(FrameAutosave(name: "GnomonSettingsWindow"))
+                .background(FrameAutosave(name: "GnomonSettingsWindow.v2"))
         }
         .windowResizability(.contentSize)
-        .defaultSize(width: 460, height: 740)
+        .defaultSize(width: 480, height: 1080)
     }
 
     @MainActor

@@ -36,7 +36,7 @@ struct SettingsWindow: View {
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minWidth: 460, idealWidth: 460, minHeight: 740, idealHeight: 740)
+        .frame(minWidth: 480, idealWidth: 480, minHeight: 900, idealHeight: 1080)
         .background(Theme.background)
         .onChange(of: brightnessMin) { _, _ in pushParameters() }
         .onChange(of: brightnessMax) { _, _ in pushParameters() }
