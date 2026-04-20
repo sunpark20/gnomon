@@ -18,7 +18,7 @@ struct SettingsWindow: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @AppStorage("brightnessMin") private var brightnessMin = 20
     @AppStorage("brightnessMax") private var brightnessMax = 95
-    @AppStorage("syncIntervalSeconds") private var syncIntervalSeconds = 30
+    @AppStorage("syncIntervalSeconds") private var syncIntervalSeconds: Double = 30
     @State private var recorderBindings: [HotkeyAction: KeyBinding] = HotkeyBindingStore.load()
     @State private var recordingAction: HotkeyAction?
     @State private var intervalText = "30"
@@ -41,12 +41,20 @@ struct SettingsWindow: View {
         .onChange(of: brightnessMin) { _, _ in pushParameters() }
         .onChange(of: brightnessMax) { _, _ in pushParameters() }
         .onChange(of: syncIntervalSeconds) { _, newValue in
-            controller.syncInterval = TimeInterval(newValue)
-            intervalText = String(newValue)
+            controller.syncInterval = newValue
+            intervalText = Self.formatInterval(newValue)
         }
         .onAppear {
-            intervalText = String(syncIntervalSeconds)
+            intervalText = Self.formatInterval(syncIntervalSeconds)
         }
+    }
+
+    /// Renders `30` as "30", `0.5` as "0.5", `12.3456` as "12.35".
+    private static func formatInterval(_ value: Double) -> String {
+        if value.rounded() == value {
+            return String(format: "%.0f", value)
+        }
+        return String(format: "%.2f", value).trimmingTrailingZeros()
     }
 
     // MARK: - Sections
@@ -142,19 +150,21 @@ struct SettingsWindow: View {
                     Text("Interval (seconds)").font(.caption).foregroundStyle(Theme.textSecondary)
                     TextField("30", text: $intervalText)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 90)
+                        .frame(width: 100)
                         .onSubmit { commitIntervalText() }
                 }
                 HStack(spacing: 6) {
-                    ForEach([15, 30, 60, 120], id: \.self) { preset in
-                        Button("\(preset)s") { syncIntervalSeconds = preset }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
+                    ForEach([0.5, 5.0, 30.0, 60.0, 300.0], id: \.self) { preset in
+                        Button(Self.formatInterval(preset) + "s") {
+                            syncIntervalSeconds = preset
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                     }
                 }
                 Spacer()
             }
-            Text("Tip: any value between 5 and 3600 seconds.")
+            Text("Decimals OK (e.g. 0.5). No upper limit — hardware and DDC tolerance are the only constraints.")
                 .font(.caption2)
                 .foregroundStyle(Theme.textSecondary)
 
@@ -201,12 +211,11 @@ struct SettingsWindow: View {
 
     private func commitIntervalText() {
         let trimmed = intervalText.trimmingCharacters(in: .whitespaces)
-        if let value = Int(trimmed) {
-            let clamped = max(5, min(3600, value))
-            syncIntervalSeconds = clamped
-            intervalText = String(clamped)
+        if let value = Double(trimmed), value > 0 {
+            syncIntervalSeconds = value
+            intervalText = Self.formatInterval(value)
         } else {
-            intervalText = String(syncIntervalSeconds)
+            intervalText = Self.formatInterval(syncIntervalSeconds)
         }
     }
 
