@@ -1,0 +1,74 @@
+# Gnomon SwiftLint configuration
+# Philosophy: strict enough to catch real issues, loose enough for domain-specific
+# short names (lux, b, c for brightness/contrast in the curve module).
+
+included:
+  - Gnomon
+  - GnomonTests
+
+excluded:
+  - Gnomon/Resources
+  - .build
+  - DerivedData
+
+disabled_rules:
+  - todo                           # TODO/FIXME are OK during development
+  - trailing_comma                 # Xcode default matches SwiftFormat
+  - opening_brace                  # SwiftFormat handles this
+
+opt_in_rules:
+  - empty_count
+  - explicit_init
+  - closure_spacing
+  - contains_over_filter_count
+  - contains_over_first_not_nil
+  - fatal_error_message
+  - first_where
+  - force_unwrapping
+  - implicit_return
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - unneeded_parentheses_in_closure_argument
+
+line_length:
+  warning: 120
+  error: 160
+  ignores_urls: true
+  ignores_comments: false
+
+identifier_name:
+  min_length:
+    warning: 1                     # Allow `b`, `c`, `x` for domain math
+    error: 1
+  max_length:
+    warning: 50
+    error: 80
+  excluded:
+    - id
+
+type_name:
+  min_length: 3
+  max_length:
+    warning: 50
+    error: 60
+
+function_body_length:
+  warning: 50
+  error: 100
+
+file_length:
+  warning: 400
+  error: 600
+
+cyclomatic_complexity:
+  warning: 12
+  error: 20
+
+nesting:
+  type_level: 2
+  function_level: 3
+
+force_unwrapping:
+  severity: error
+
+reporter: "xcode"

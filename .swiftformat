@@ -1,0 +1,28 @@
+# Gnomon SwiftFormat configuration
+
+--swiftversion 6.0
+--indent 4
+--maxwidth 120
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--closingparen balanced
+--trimwhitespace always
+--linebreaks lf
+--importgrouping testable-bottom
+--commas always
+--ranges spaced
+--semicolons never
+--stripunusedargs closure-only
+--self remove
+--redundanttype inferred
+--exponentcase lowercase
+--hexliteralcase uppercase
+--decimalgrouping 3,6
+--binarygrouping 4,8
+--hexgrouping 4,8
+--elseposition same-line
+--guardelse same-line
+--ifdef no-indent
+
+--exclude .build,DerivedData,Gnomon/Resources
