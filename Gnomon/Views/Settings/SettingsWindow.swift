@@ -151,7 +151,7 @@ struct SettingsWindow: View {
             })
             .buttonStyle(.plain)
             .keyboardShortcut(.cancelAction)
-        }) {
+        }, content: {
             Text("Double-click a row to reassign. Press ESC to cancel.")
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
@@ -190,7 +190,7 @@ struct SettingsWindow: View {
                 .buttonStyle(.borderless)
                 .foregroundStyle(Theme.gold)
             }
-        }
+        })
     }
 
     private var darkFloorIsPending: Bool {
@@ -247,17 +247,17 @@ struct SettingsWindow: View {
                     Spacer()
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                Text("밝기 0%에 맞는 최저 조도를 찾아 캘리브레이션합니다.")
+                    Text("밝기 0%에 맞는 최저 조도를 찾아 캘리브레이션합니다.")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Theme.textSecondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("평소 가장 어두운 환경에서 하얀 종이를 모니터 옆에 대세요.")
+                        Text("모니터 화면(흰 배경)이 종이와 비슷하거나 살짝 밝으면 최적입니다.")
+                        Text("너무 밝으면 이 값을 올리세요.")
+                    }
                     .font(.caption2)
-                    .fontWeight(.semibold)
                     .foregroundStyle(Theme.textSecondary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("평소 가장 어두운 환경에서 하얀 종이를 모니터 옆에 대세요.")
-                    Text("모니터 화면(흰 배경)이 종이와 비슷하거나 살짝 밝으면 최적입니다.")
-                    Text("너무 밝으면 이 값을 올리세요.")
-                }
-                .font(.caption2)
-                .foregroundStyle(Theme.textSecondary)
                 }
             }
         }
@@ -482,7 +482,7 @@ private struct SettingsSection<Trailing: View, Content: View>: View {
     init(title: String, iconName: String, @ViewBuilder content: () -> Content) where Trailing == EmptyView {
         self.title = title
         self.iconName = iconName
-        self.trailing = EmptyView()
+        trailing = EmptyView()
         self.content = content()
     }
 

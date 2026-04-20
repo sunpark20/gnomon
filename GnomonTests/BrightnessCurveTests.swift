@@ -9,16 +9,11 @@ import XCTest
 @testable import Gnomon
 
 final class BrightnessCurveTests: XCTestCase {
-    /// Sample points from PRD §5.2.1 (corrected math):
-    /// lux → b%
-    ///   0  → 20
-    ///   5  → 38  (originally mistyped as 24 in PRD v0.4; corrected in v0.5)
-    ///  50  → 59
-    /// 200  → 72
-    /// 500  → 81
-    /// 1000 → 88
-    /// 2000 → 95
+    /// Sample points from PRD §5.2.1 using PRD-recommended parameters.
     func testPRDSamplePoints() {
+        let prd = BrightnessCurve.Parameters(
+            minBrightness: 20, maxBrightness: 95, luxCeiling: 2000, darkFloorLux: 3
+        )
         let cases: [(lux: Double, expected: Int)] = [
             (0, 20),
             (5, 38),
@@ -29,7 +24,7 @@ final class BrightnessCurveTests: XCTestCase {
             (2000, 95),
         ]
         for (lux, expected) in cases {
-            let actual = BrightnessCurve.target(lux: lux)
+            let actual = BrightnessCurve.target(lux: lux, parameters: prd)
             XCTAssertEqual(
                 actual, expected, accuracy: 1,
                 "lux=\(lux) expected ~\(expected) got \(actual)"
@@ -38,9 +33,9 @@ final class BrightnessCurveTests: XCTestCase {
     }
 
     func testClampsAtBoundaries() {
-        XCTAssertEqual(BrightnessCurve.target(lux: -100), 20, "Negative lux clamps to bMin")
-        XCTAssertEqual(BrightnessCurve.target(lux: 5000), 95, "Way above ceiling clamps to bMax")
-        XCTAssertEqual(BrightnessCurve.target(lux: 999_999), 95)
+        XCTAssertEqual(BrightnessCurve.target(lux: -100), 0, "Negative lux clamps to bMin")
+        XCTAssertEqual(BrightnessCurve.target(lux: 5000), 100, "Way above ceiling clamps to bMax")
+        XCTAssertEqual(BrightnessCurve.target(lux: 999_999), 100)
     }
 
     func testCustomParameters() {
@@ -50,14 +45,10 @@ final class BrightnessCurveTests: XCTestCase {
     }
 
     func testDarkFloorReturnsMinBrightness() {
-        // macOS returns ~1–3 lux with a fully covered sensor; without the floor
-        // the curve outputs ~27–31 at those values, preventing the user's
-        // configured min brightness from ever being reached.
-        XCTAssertEqual(BrightnessCurve.target(lux: 0), 20)
-        XCTAssertEqual(BrightnessCurve.target(lux: 1), 20, "1 lux below default 3-lux floor → b_min")
-        XCTAssertEqual(BrightnessCurve.target(lux: 2), 20)
-        XCTAssertEqual(BrightnessCurve.target(lux: 3), 20, "3 lux at floor boundary → b_min")
-        XCTAssertGreaterThan(BrightnessCurve.target(lux: 4), 20, "Just above floor → curve takes over")
+        XCTAssertEqual(BrightnessCurve.target(lux: 0), 0)
+        XCTAssertEqual(BrightnessCurve.target(lux: 5), 0, "5 lux below default 15-lux floor → b_min")
+        XCTAssertEqual(BrightnessCurve.target(lux: 15), 0, "15 lux at floor boundary → b_min")
+        XCTAssertGreaterThan(BrightnessCurve.target(lux: 16), 0, "Just above floor → curve takes over")
     }
 
     func testCustomDarkFloor() {
