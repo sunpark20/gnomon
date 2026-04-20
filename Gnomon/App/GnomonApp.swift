@@ -10,12 +10,43 @@ import SwiftUI
 @main
 struct GnomonApp: App {
     @State private var controller = AutoLoopController()
+    @State private var hotkeys = HotkeyManager()
 
     var body: some Scene {
         WindowGroup {
             MainWindow(controller: controller)
-                .task { await controller.start() }
+                .task {
+                    await controller.start()
+                    wireHotkeys()
+                }
         }
         .windowResizability(.contentSize)
     }
+
+    @MainActor
+    private func wireHotkeys() {
+        hotkeys.onAction = { action in
+            switch action {
+            case .brightnessUp:
+                let base = controller.lastSentBrightness ?? controller.targetBrightness
+                controller.userSetBrightness(base + 5)
+            case .brightnessDown:
+                let base = controller.lastSentBrightness ?? controller.targetBrightness
+                controller.userSetBrightness(base - 5)
+            case .contrastUp:
+                controller.userSetContrast(controller.contrast + 5)
+            case .contrastDown:
+                controller.userSetContrast(controller.contrast - 5)
+            case .toggleAuto:
+                controller.toggleAuto()
+            case .toggleWindow:
+                NotificationCenter.default.post(name: .gnomonToggleWindow, object: nil)
+            }
+        }
+        hotkeys.start()
+    }
+}
+
+extension Notification.Name {
+    static let gnomonToggleWindow = Notification.Name("com.sunguk.gnomon.toggleWindow")
 }
