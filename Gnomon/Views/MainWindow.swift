@@ -16,13 +16,14 @@ struct MainWindow: View {
     /// 이건 UI 문구 교대 주기.
     private let turnDuration: TimeInterval = 10
     @State private var messageEpoch: Date = .now
+    @State private var currentMessage: DisplayMessage = .witty("...")
+    @State private var lastTurnIndex: Int = -1
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.1)) { context in
             let category = LuxCategory.classify(controller.emaLux)
             let elapsed = max(0, context.date.timeIntervalSince(messageEpoch))
             let turnIndex = Int(elapsed / turnDuration)
-            let message = buildMessage(turnIndex: turnIndex, category: category)
 
             VStack(spacing: 0) {
                 topBar
@@ -30,7 +31,7 @@ struct MainWindow: View {
                     AmbientSensorCard(
                         lux: controller.currentLux,
                         category: category,
-                        message: message
+                        message: currentMessage
                     )
                     .frame(width: 280)
 
@@ -50,8 +51,18 @@ struct MainWindow: View {
             }
             .background(Theme.background)
             .frame(minWidth: 960)
-            .environment(\.controlActiveState, .active)
+            .onChange(of: turnIndex) { _, newTurn in
+                let cat = LuxCategory.classify(controller.emaLux)
+                currentMessage = buildMessage(turnIndex: newTurn, category: cat)
+                lastTurnIndex = newTurn
+            }
+            .onAppear {
+                let cat = LuxCategory.classify(controller.emaLux)
+                currentMessage = buildMessage(turnIndex: 0, category: cat)
+                lastTurnIndex = 0
+            }
         }
+        .environment(\.controlActiveState, .active)
     }
 
     /// 짝수 턴 = 기본 위트 / 홀수 턴 = 개발자 외침.

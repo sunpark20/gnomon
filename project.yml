@@ -36,7 +36,7 @@ targets:
         MARKETING_VERSION: "1.6.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_LSUIElement: NO
+        INFOPLIST_KEY_LSUIElement: YES
         INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 Sunguk. All rights reserved."
         INFOPLIST_KEY_NSMainStoryboardFile: ""
         COMBINE_HIDPI_IMAGES: YES

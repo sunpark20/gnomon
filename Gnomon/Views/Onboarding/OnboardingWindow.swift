@@ -135,14 +135,20 @@ private struct CalibrationTip: View {
                 .foregroundStyle(Theme.gold)
                 .frame(width: 28, height: 28)
             VStack(alignment: .leading, spacing: 4) {
-                Text("캘리브레이션 필수")
+                Text("Calibration — Dark Floor Lux")
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundStyle(.orange)
-                Text("해가 진 뒤 불을 끄고 어두운 환경에서 진행해주세요. Settings → Brightness Range → 최저 밝기 조도")
+                    .foregroundStyle(Theme.gold)
+                Text("The ambient lux level where Min % brightness is correct. Open a white window, then hold white paper next to it. If the screen is brighter than the paper, raise this value until they match.")
                     .font(.caption)
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 4) {
+                    Image(systemName: "gearshape")
+                    Text("Settings → Brightness Range")
+                }
+                .font(.caption2)
+                .foregroundStyle(Theme.textSecondary)
             }
             Spacer()
         }

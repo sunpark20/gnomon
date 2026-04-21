@@ -45,39 +45,37 @@ struct AmbientSensorCard: View {
 
             Spacer(minLength: 0)
 
-            // 3. 하단: 게이지와 메시지
-            VStack(spacing: 40) {
-                // 밝기 게이지
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Dark").font(.caption2).foregroundStyle(Theme.textSecondary)
-                        Spacer()
-                        Text("Bright").font(.caption2).foregroundStyle(Theme.textSecondary)
-                    }
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Theme.gold.opacity(0.15))
-                            Capsule()
-                                .fill(LinearGradient(
-                                    colors: [Theme.gold.opacity(0.6), Theme.gold],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ))
-                                .frame(width: max(8, proxy.size.width * gaugeFraction))
-                        }
-                    }
-                    .frame(height: 8)
+            // 3. 게이지
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Dark").font(.caption2).foregroundStyle(Theme.textSecondary)
+                    Spacer()
+                    Text("Bright").font(.caption2).foregroundStyle(Theme.textSecondary)
                 }
-
-                // 위트 메시지 혹은 샤웃
-                messageView
-                    .frame(maxWidth: .infinity, alignment: .center)
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Theme.gold.opacity(0.15))
+                        Capsule()
+                            .fill(LinearGradient(
+                                colors: [Theme.gold.opacity(0.6), Theme.gold],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ))
+                            .frame(width: max(8, proxy.size.width * gaugeFraction))
+                    }
+                }
+                .frame(height: 8)
             }
 
             Spacer(minLength: 0)
         }
         .padding(32)
-        // 오른쪽 뷰들의 전체 높이만큼 늘어나도록 팽창 속성 부여
+        .overlay(alignment: .bottom) {
+            messageView
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, 32)
+                .padding(.bottom, 32)
+        }
         .frame(minWidth: 260, maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 24))
@@ -200,7 +198,7 @@ private struct QRCodeImage: View {
     AmbientSensorCard(
         lux: 17,
         category: .veryDim,
-        message: .witty("야간 레이드 시작 가능한 조도입니다.")
+        message: .witty("Night-raid-ready illumination. Grab your gear.")
     )
     .padding()
     .background(Theme.background)

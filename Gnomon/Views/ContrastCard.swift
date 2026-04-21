@@ -46,8 +46,9 @@ struct ContrastCard: View {
                 TextField("0–100", text: $editText)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 80)
-                    .font(.system(size: 32, weight: .heavy))
+                    .font(.system(size: 56, weight: .heavy))
                     .onSubmit { commit() }
+                    .onKeyPress(.escape) { isEditingNumber = false; return .handled }
                     .onChange(of: editText) { _, newValue in
                         if newValue.count == 2, let value = Int(newValue), (10 ... 99).contains(value) {
                             controller.userSetContrast(value)
@@ -56,7 +57,7 @@ struct ContrastCard: View {
                     }
             } else {
                 Text("\(controller.contrast)")
-                    .font(.system(size: 48, weight: .heavy))
+                    .font(.system(size: 56, weight: .heavy))
                     .foregroundStyle(Theme.textPrimary)
                     .onTapGesture {
                         editText = String(controller.contrast)
@@ -70,7 +71,7 @@ struct ContrastCard: View {
     }
 
     private var slider: some View {
-        Slider(
+        GoldSlider(
             value: Binding(
                 get: { Double(controller.contrast) },
                 set: { newValue in
@@ -81,11 +82,8 @@ struct ContrastCard: View {
                     }
                     controller.userSetContrast(rounded)
                 }
-            ),
-            in: 0 ... 100,
-            step: 1
+            )
         )
-        .tint(Theme.gold)
     }
 
     private var rangeLabels: some View {

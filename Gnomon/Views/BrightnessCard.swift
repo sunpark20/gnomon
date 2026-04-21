@@ -54,8 +54,7 @@ struct BrightnessCard: View {
                 get: { controller.autoEnabled },
                 set: { _ in controller.toggleAuto() }
             ))
-            .toggleStyle(.switch)
-            .tint(Theme.gold)
+            .toggleStyle(GoldToggleStyle())
             .labelsHidden()
             HStack(spacing: 6) {
                 Text("Auto").font(.caption).foregroundStyle(Theme.textSecondary)
@@ -73,8 +72,9 @@ struct BrightnessCard: View {
                 TextField("0–100", text: $editText)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 80)
-                    .font(.system(size: 32, weight: .heavy))
+                    .font(.system(size: 56, weight: .heavy))
                     .onSubmit { commitEditedValue() }
+                    .onKeyPress(.escape) { isEditingNumber = false; return .handled }
                     .onChange(of: editText) { _, newValue in
                         // Auto-commit when the user types a 2-digit value (10–99).
                         // 1-digit or 100 still needs Enter to avoid premature commit.
@@ -113,7 +113,7 @@ struct BrightnessCard: View {
     }
 
     private var slider: some View {
-        Slider(
+        GoldSlider(
             value: Binding(
                 get: { Double(current) },
                 set: { newValue in
@@ -125,12 +125,8 @@ struct BrightnessCard: View {
                     controller.userSetBrightness(rounded)
                 }
             ),
-            in: 0 ... 100,
-            step: 1
+            disabled: controller.autoEnabled
         )
-        .tint(Theme.gold)
-        .disabled(controller.autoEnabled)
-        .opacity(controller.autoEnabled ? 0.5 : 1)
     }
 
     private var rangeLabels: some View {

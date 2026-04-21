@@ -71,7 +71,6 @@ public final class IconUpdater {
         let components = calendar.dateComponents([.hour, .minute], from: Date())
         let hour = components.hour ?? 0
         let minute = components.minute ?? 0
-        updateDockIcon(hour: hour, minute: minute)
         updateMenuBarIcon(hour: hour, minute: minute)
     }
 
@@ -99,11 +98,6 @@ public final class IconUpdater {
                 self?.refreshNow()
             }
         }
-    }
-
-    private func updateDockIcon(hour: Int, minute: Int) {
-        let image = SundialIconRenderer.image(hour: hour, minute: minute, style: .dock)
-        NSApp.applicationIconImage = image
     }
 
     private func updateMenuBarIcon(hour: Int, minute: Int) {

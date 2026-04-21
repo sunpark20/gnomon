@@ -102,7 +102,6 @@ public final class WindowManager {
     }
 
     private func bringAppForward() {
-        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }
 }

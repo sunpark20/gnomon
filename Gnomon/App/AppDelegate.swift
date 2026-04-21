@@ -34,8 +34,6 @@ public final class GnomonAppDelegate: NSObject, NSApplicationDelegate {
             WindowManager.shared.toggle()
         }
 
-        NSApp.setActivationPolicy(.accessory)
-
         let updater = IconUpdater()
         updater.statusItem = controller.rawItem
         updater.start()

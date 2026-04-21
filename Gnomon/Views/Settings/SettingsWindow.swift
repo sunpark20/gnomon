@@ -121,37 +121,19 @@ struct SettingsWindow: View {
     // MARK: - Sections
 
     private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading) {
-                Text("Gnomon")
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundStyle(Theme.textPrimary)
-                Text("Settings & Preferences")
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.textSecondary)
-            }
-            Spacer()
-            Button(action: { dismissWindow() }, label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(Theme.textSecondary)
-            })
-            .buttonStyle(.plain)
-            .keyboardShortcut(.cancelAction)
+        VStack(alignment: .leading) {
+            Text("Gnomon")
+                .font(.title)
+                .fontWeight(.bold)
+                .foregroundStyle(Theme.textPrimary)
+            Text("Settings & Preferences")
+                .font(.subheadline)
+                .foregroundStyle(Theme.textSecondary)
         }
     }
 
     private var hotkeysSection: some View {
-        SettingsSection(title: "Hotkeys", iconName: "keyboard", trailing: {
-            Button(action: { dismissWindow() }, label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(Theme.textSecondary)
-            })
-            .buttonStyle(.plain)
-            .keyboardShortcut(.cancelAction)
-        }, content: {
+        SettingsSection(title: "Hotkeys", iconName: "keyboard") {
             Text("Double-click a row to reassign. Press ESC to cancel.")
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
@@ -190,7 +172,7 @@ struct SettingsWindow: View {
                 .buttonStyle(.borderless)
                 .foregroundStyle(Theme.gold)
             }
-        })
+        }
     }
 
     private var darkFloorIsPending: Bool {
@@ -226,7 +208,7 @@ struct SettingsWindow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("최저 밝기 조도").font(.caption).foregroundStyle(Theme.textSecondary)
+                        Text("Calibration — Dark Floor Lux").font(.caption).foregroundStyle(Theme.textSecondary)
                         HStack(spacing: 4) {
                             TextField("15", text: $darkFloorText)
                                 .textFieldStyle(.roundedBorder)
@@ -238,27 +220,18 @@ struct SettingsWindow: View {
                                         .animation(.easeInOut(duration: 0.15), value: darkFloorIsPending)
                                 )
                                 .onSubmit { commitDarkFloorText() }
+                                .onKeyPress(.escape) { darkFloorFocused = false; return .handled }
                             Text("lx")
                                 .font(.caption)
                                 .foregroundStyle(Theme.textSecondary)
+                            pendingHint(isPending: darkFloorIsPending)
                         }
-                        pendingHint(isPending: darkFloorIsPending)
                     }
                     Spacer()
                 }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("밝기 0%에 맞는 최저 조도를 찾아 캘리브레이션합니다.")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Theme.textSecondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("평소 가장 어두운 환경에서 하얀 종이를 모니터 옆에 대세요.")
-                        Text("모니터 화면(흰 배경)이 종이와 비슷하거나 살짝 밝으면 최적입니다.")
-                        Text("너무 밝으면 이 값을 올리세요.")
-                    }
+                Text("The ambient lux level where Min % brightness is correct. Open a white window, then hold white paper next to it. If the screen is brighter than the paper, raise this value until they match.")
                     .font(.caption2)
                     .foregroundStyle(Theme.textSecondary)
-                }
             }
         }
     }
@@ -282,6 +255,7 @@ struct SettingsWindow: View {
                         .animation(.easeInOut(duration: 0.15), value: isPending)
                 )
                 .onSubmit(onSubmit)
+                .onKeyPress(.escape) { isFocused.wrappedValue = false; return .handled }
             pendingHint(isPending: isPending)
         }
     }
@@ -291,7 +265,7 @@ struct SettingsWindow: View {
         HStack(spacing: 4) {
             Image(systemName: "return")
                 .font(.caption2)
-            Text("Enter로 적용")
+            Text("Press Enter")
                 .font(.caption2)
         }
         .foregroundStyle(Theme.gold)
@@ -300,12 +274,12 @@ struct SettingsWindow: View {
 
     private var syncSection: some View {
         SettingsSection(title: "Sync Options", iconName: "arrow.triangle.2.circlepath") {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Interval (seconds)").font(.caption).foregroundStyle(Theme.textSecondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Brightness Sync Interval").font(.caption).foregroundStyle(Theme.textSecondary)
+                HStack(spacing: 4) {
                     TextField("30", text: $intervalText)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
+                        .frame(width: 70)
                         .focused($intervalFocused)
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
@@ -313,50 +287,58 @@ struct SettingsWindow: View {
                                 .animation(.easeInOut(duration: 0.15), value: intervalIsPending)
                         )
                         .onSubmit { commitIntervalText() }
-                    pendingHint(isPending: intervalIsPending)
-                }
-                VStack {
-                    HStack(spacing: 6) {
-                        ForEach([0.5, 5.0, 30.0, 60.0, 300.0], id: \.self) { preset in
-                            Button(Self.formatInterval(preset) + "s") {
-                                syncIntervalSeconds = preset
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
+                        .onKeyPress(.escape) { intervalFocused = false; return .handled }
+                    Text("s")
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                    ForEach([5.0, 30.0, 60.0, 300.0], id: \.self) { preset in
+                        Button(Self.formatInterval(preset) + "s") {
+                            syncIntervalSeconds = preset
                         }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                     }
-                    .padding(.top, 18)
-                    Spacer(minLength: 0)
                 }
-                Spacer()
             }
-            Text(intervalTip)
-                .font(.caption2)
-                .foregroundStyle(intervalTipColor)
-                .italic(syncIntervalSeconds < 1 || syncIntervalSeconds > 3600)
-
-            Text("인터벌과 상관없이 급격한 조도 변화는 즉시 반영됩니다.")
-                .font(.caption2)
-                .foregroundStyle(Theme.textSecondary)
+            ZStack(alignment: .topLeading) {
+                Group {
+                    Text(Self.tipTooFast)
+                    Text(Self.tipTooSlow)
+                    Text(Self.tipDefault)
+                }
+                .hidden()
+                Text(intervalTip)
+                    .foregroundStyle(intervalTipColor)
+                    .italic(syncIntervalSeconds < 1 || syncIntervalSeconds > 3600)
+            }
+            .font(.caption2)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
 
     private var bugReportSection: some View {
-        SettingsSection(title: "Bug Report", iconName: "ladybug") {
-            HStack {
-                Button("Open Logs Folder") {
-                    openLogsFolder()
+        SettingsSection(title: "Bug Report", iconName: "ladybug", trailing: {
+            let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+            Text("v\(version)")
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+        }) {
+            HStack(spacing: 6) {
+                Button(action: { openLogsFolder() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "folder")
+                        Text("Open Logs Folder")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(Theme.gold)
                 }
-                .buttonStyle(.borderless)
-                .foregroundStyle(Theme.gold)
+                .buttonStyle(.plain)
                 Spacer()
             }
             HStack(spacing: 6) {
-                Text("Email")
-                    .font(.caption)
-                    .foregroundStyle(Theme.textSecondary)
                 Button(action: copyBugReportEmail) {
                     HStack(spacing: 4) {
+                        Image(systemName: "envelope")
                         Text(bugReportEmail)
                         Image(systemName: emailCopied ? "checkmark" : "doc.on.doc")
                     }
@@ -367,7 +349,7 @@ struct SettingsWindow: View {
                 .help(emailCopied ? "Copied!" : "Click to copy")
                 Spacer()
                 Button(action: {
-                    if let url = URL(string: "https://ninjaturtle.win/#gnomon") {
+                    if let url = URL(string: "https://homeninja.vercel.app/#gnomon") {
                         NSWorkspace.shared.open(url)
                     }
                 }, label: {
@@ -392,14 +374,14 @@ struct SettingsWindow: View {
 
     // MARK: - Helpers
 
+    private static let tipTooFast = "Too fast — may damage your monitor."
+    private static let tipTooSlow = "Very slow — brightness may feel out of sync."
+    private static let tipDefault = "Sudden light changes apply instantly, regardless of sync interval."
+
     private var intervalTip: String {
-        if syncIntervalSeconds < 1 {
-            return "여기 클럽인가요?? 모니터가 고장나도 책임지지 않아요."
-        }
-        if syncIntervalSeconds > 3600 {
-            return "당신은 영생을 사는 존재이십니까? 이렇게 느리게 리프레쉬 되도 정말 괜찮아요?"
-        }
-        return "소수점도 OK (예: 0.5초). 제한 없음."
+        if syncIntervalSeconds < 1 { return Self.tipTooFast }
+        if syncIntervalSeconds > 3600 { return Self.tipTooSlow }
+        return Self.tipDefault
     }
 
     private var intervalTipColor: Color {
