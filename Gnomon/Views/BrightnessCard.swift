@@ -74,7 +74,9 @@ struct BrightnessCard: View {
                     .frame(width: 80)
                     .font(.system(size: 56, weight: .heavy))
                     .onSubmit { commitEditedValue() }
-                    .onKeyPress(.escape) { isEditingNumber = false; return .handled }
+                    .onKeyPress(.escape) { isEditingNumber = false
+                        return .handled
+                    }
                     .onChange(of: editText) { _, newValue in
                         // Auto-commit when the user types a 2-digit value (10–99).
                         // 1-digit or 100 still needs Enter to avoid premature commit.

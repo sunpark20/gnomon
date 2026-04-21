@@ -37,6 +37,8 @@ struct SettingsWindow: View {
     @FocusState private var darkFloorFocused: Bool
 
     private let bugReportEmail = "coastguard2681@gmail.com"
+    // swiftlint:disable:next line_length
+    private static let calibrationTip = "The ambient lux level where Min % brightness is correct. Open a white window, then hold white paper next to it. If the screen is brighter than the paper, raise this value until they match."
 
     var body: some View {
         ScrollView {
@@ -220,7 +222,9 @@ struct SettingsWindow: View {
                                         .animation(.easeInOut(duration: 0.15), value: darkFloorIsPending)
                                 )
                                 .onSubmit { commitDarkFloorText() }
-                                .onKeyPress(.escape) { darkFloorFocused = false; return .handled }
+                                .onKeyPress(.escape) { darkFloorFocused = false
+                                    return .handled
+                                }
                             Text("lx")
                                 .font(.caption)
                                 .foregroundStyle(Theme.textSecondary)
@@ -229,7 +233,7 @@ struct SettingsWindow: View {
                     }
                     Spacer()
                 }
-                Text("The ambient lux level where Min % brightness is correct. Open a white window, then hold white paper next to it. If the screen is brighter than the paper, raise this value until they match.")
+                Text(Self.calibrationTip)
                     .font(.caption2)
                     .foregroundStyle(Theme.textSecondary)
             }
@@ -255,7 +259,9 @@ struct SettingsWindow: View {
                         .animation(.easeInOut(duration: 0.15), value: isPending)
                 )
                 .onSubmit(onSubmit)
-                .onKeyPress(.escape) { isFocused.wrappedValue = false; return .handled }
+                .onKeyPress(.escape) { isFocused.wrappedValue = false
+                    return .handled
+                }
             pendingHint(isPending: isPending)
         }
     }
@@ -287,7 +293,9 @@ struct SettingsWindow: View {
                                 .animation(.easeInOut(duration: 0.15), value: intervalIsPending)
                         )
                         .onSubmit { commitIntervalText() }
-                        .onKeyPress(.escape) { intervalFocused = false; return .handled }
+                        .onKeyPress(.escape) { intervalFocused = false
+                            return .handled
+                        }
                     Text("s")
                         .font(.caption)
                         .foregroundStyle(Theme.textSecondary)
@@ -322,7 +330,7 @@ struct SettingsWindow: View {
             Text("v\(version)")
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
-        }) {
+        }, content: {
             HStack(spacing: 6) {
                 Button(action: { openLogsFolder() }) {
                     HStack(spacing: 4) {
@@ -360,7 +368,7 @@ struct SettingsWindow: View {
                 .buttonStyle(.plain)
                 .help("Homepage")
             }
-        }
+        })
     }
 
     private var aboutSection: some View {

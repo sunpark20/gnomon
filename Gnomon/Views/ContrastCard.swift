@@ -48,7 +48,9 @@ struct ContrastCard: View {
                     .frame(width: 80)
                     .font(.system(size: 56, weight: .heavy))
                     .onSubmit { commit() }
-                    .onKeyPress(.escape) { isEditingNumber = false; return .handled }
+                    .onKeyPress(.escape) { isEditingNumber = false
+                        return .handled
+                    }
                     .onChange(of: editText) { _, newValue in
                         if newValue.count == 2, let value = Int(newValue), (10 ... 99).contains(value) {
                             controller.userSetContrast(value)

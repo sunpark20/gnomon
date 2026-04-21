@@ -20,7 +20,7 @@ struct GoldSlider: View {
     @Binding var value: Double
     var range: ClosedRange<Double> = 0 ... 100
     var step: Double = 1
-    var disabled: Bool = false
+    var disabled = false
     var onChanged: ((Double) -> Void)?
 
     var body: some View {
@@ -49,7 +49,8 @@ struct GoldSlider: View {
                     .onChanged { drag in
                         guard !disabled else { return }
                         let ratio = max(0, min(1, drag.location.x / proxy.size.width))
-                        let stepped = (ratio * (range.upperBound - range.lowerBound) / step).rounded() * step + range.lowerBound
+                        let stepped = (ratio * (range.upperBound - range.lowerBound) / step).rounded() * step + range
+                            .lowerBound
                         let clamped = max(range.lowerBound, min(range.upperBound, stepped))
                         if clamped != value {
                             value = clamped
