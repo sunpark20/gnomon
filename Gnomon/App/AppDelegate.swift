@@ -48,6 +48,7 @@ public final class GnomonAppDelegate: NSObject, NSApplicationDelegate {
                 WindowManager.shared.toggle()
             }
         }
+
     }
 
     public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {

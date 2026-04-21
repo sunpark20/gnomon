@@ -32,6 +32,11 @@ struct GnomonApp: App {
                     OnboardingWindow(viewModel: onboarding) {
                         onboardingCompletedAt = Date().timeIntervalSince1970
                     }
+                    .frame(width: 520, height: 580)
+                    .background(WindowAccessor { window in
+                        window.setContentSize(NSSize(width: 520, height: 580))
+                        window.center()
+                    })
                 }
             }
         }
