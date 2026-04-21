@@ -332,14 +332,14 @@ struct SettingsWindow: View {
                 .foregroundStyle(Theme.textSecondary)
         }, content: {
             HStack(spacing: 6) {
-                Button(action: { openLogsFolder() }) {
+                Button(action: { openLogsFolder() }, label: {
                     HStack(spacing: 4) {
                         Image(systemName: "folder")
                         Text("Open Logs Folder")
                     }
                     .font(.caption)
                     .foregroundStyle(Theme.gold)
-                }
+                })
                 .buttonStyle(.plain)
                 Spacer()
             }

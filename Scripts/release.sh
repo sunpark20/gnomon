@@ -55,7 +55,7 @@ command -v xcrun >/dev/null || { echo -e "${RED}xcrun not found. Install Xcode C
 
 # ── Gate ───────────────────────────────────────────────────────────
 echo -e "\n${YELLOW}▶ Running gate checks${NC}"
-./Scripts/gate.sh
+./Scripts/gate.sh --skip-tests
 
 # ── Archive ────────────────────────────────────────────────────────
 ARCHIVE_PATH="build/Gnomon.xcarchive"

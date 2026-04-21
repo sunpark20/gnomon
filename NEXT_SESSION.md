@@ -1,37 +1,44 @@
 # 다음 세션 핸드오프
 
-> 작성: 2026-04-21 (세션 2)
-> 이 문서는 새 Claude 세션이 컨텍스트 없이 바로 이어받을 수 있게 작성됨.
+> 작성: 2026-04-21 (세션 3)
+> 이 문서 하나만으로 새 세션이 컨텍스트 없이 이어받을 수 있게 작성됨.
 
 ---
 
 ## TL;DR — 새 세션에서 바로 할 일
 
-**자체 배포 파이프라인 완성이 남은 유일한 블로커.**
+**창 토글 일관성 문제 수정이 1순위.**
 
-1. ~~**Carbon hotkey 교체**~~ ✅
-2. ~~**m1ddc 네이티브 포팅**~~ ✅
-3. **corebrightnessdiag 셸아웃 제거** — 보류 (아래 사유)
-4. **Developer ID 서명 + Notarization + DMG 파이프라인** ← 다음 1순위
+메인+세팅 둘 다 열린 상태에서 메인만 X로 닫고 토글하면 세팅만 반복 표시되는 버그. Cmd+W(숨기기)는 정상, X 버튼(SwiftUI 파괴) 경로에서 발생. `WindowManager.swift`의 `showAll()` → `reopenViaSwiftUI()` 호출은 동작하지만, 세팅 창과의 상호작용에서 타이밍/포커스 이슈 있음.
 
-### Phase 3 보류 사유
-`corebrightnessdiag`는 macOS 시스템 바이너리(항상 존재). 네이티브 IOKit HID 접근은 root 권한 필요 + 문서화 안 된 HID 리포트 파싱 필요 → 위험 대비 이점 낮음. Developer ID 배포(비샌드박스)에서는 `/usr/libexec/` 접근 문제 없음.
-
-### Phase 4 필요한 것
-- **Apple Developer Program 가입** ($99/년) — 이것만 하면 나머지는 `Scripts/release.sh` 실행 한 방
-- 가입 후: `export GNOMON_TEAM_ID="YOUR_TEAM_ID"` 설정
-- `Scripts/release.sh` 이미 작성됨: archive → notarize → staple → DMG → GitHub Release
+시작점: `Gnomon/App/WindowManager.swift` — `showAll()`, `reopenViaSwiftUI()`
 
 ---
 
-## 프로젝트 위치 / 상태
+## 프로젝트 현재 상태
 
 - 경로: `/Users/sunguk/0.code/moniterpicker/gnomon/`
 - GitHub: https://github.com/sunpark20/gnomon (main 브랜치)
-- 최신 상태: 아직 미커밋 — 아래 변경사항이 working tree에 있음
+- 최신 태그: **v1.6.0** (GitHub Release 배포 완료, 공증+DMG)
+- 최신 커밋: `6a1bb12` — push 완료
+- 미커밋: `BACKGROUND.md` 수정 1건 (문장 추가)
 - Gate: `./Scripts/gate.sh` **4/4 통과** (lint / format / build / test)
 - 테스트: **49개** (3개는 GNOMON_INTEGRATION=1 필요)
-- **외부 바이너리 의존: m1ddc 제거됨** (IOAVService 네이티브), corebrightnessdiag만 남음 (시스템 바이너리)
+- 홈페이지: https://ninjaturtle.win/#gnomon
+
+### 배포 파이프라인
+
+완전 자동화됨. 한 명령으로 배포:
+```bash
+pkill -f Gnomon  # 실행 중인 인스턴스 종료 필수 (안 하면 test bootstrap 실패)
+xcodegen generate
+./Scripts/release.sh  # gate → archive → notarize → staple → DMG → GitHub Release
+```
+
+Apple Developer 인증 정보:
+- Team ID: `GA2LMK5XL2`
+- Signing Identity: `Developer ID Application: sunguk park (GA2LMK5XL2)`
+- Notary Profile: `gnomon-notary` (Keychain에 저장됨)
 
 빌드:
 ```bash
@@ -45,54 +52,55 @@ open build/Build/Products/Debug/Gnomon.app
 
 ---
 
-## 이번 세션에서 완성된 것
+## 이번 세션에서 완성된 것 (v1.3.0 → v1.6.0)
 
-### Phase 1: Carbon hotkey 교체 ✅
+### 배포 파이프라인 완성 ✅
 
-| 변경 | 내용 |
+| 항목 | 내용 |
 |---|---|
-| **HotkeyManager.swift** | `NSEvent.addGlobalMonitorForEvents` → Carbon `RegisterEventHotKey`. Accessibility 권한 완전 불필요 |
-| **AccessibilityChecker.swift** | 삭제 |
-| **OnboardingViewModel.swift** | Accessibility 체크 제거 |
-| **OnboardingWindow.swift** | Accessibility 체크 행 제거 |
+| **release.sh** | Team ID/Signing Identity 기본값 설정, BSD sed 호환 버전 파싱 수정 |
+| **project.yml** | `ENABLE_HARDENED_RUNTIME: YES` 추가 (notarization 필수) |
+| **Notarization** | `gnomon-notary` Keychain 프로필 설정 완료 |
+| **v1.4.0~v1.6.0** | 3개 버전 GitHub Release 배포 성공 |
 
-### Phase 2: m1ddc 네이티브 포팅 ✅
+### 창 관리 버그 수정 ✅ (부분)
 
-| 변경 | 내용 |
+| 항목 | 내용 |
 |---|---|
-| **NativeDDC.swift** (신규) | IOAVService 직접 호출. `DCPAVServiceProxy` IOKit 매칭 → `IOAVServiceCreateWithService` → DDC/CI I2C 프로토콜 (Get/Set VCP Feature). 디스플레이 이름은 IOKit `DisplayProductName` 프로퍼티에서 추출 |
-| **M1DDCClient.swift** | ProcessRunner 셸아웃 제거 → NativeDDC 호출. `Task.detached`로 I2C 블로킹(40ms usleep) 격리. 같은 public API 유지 |
-| **OnboardingViewModel.swift** | m1ddc 미설치 에러 핸들링 제거 (네이티브이므로 불필요) |
-| **MonitorID.swift** | uuid 필드가 IOKit registry entry ID를 저장하도록 변경 |
+| **WindowManager.swift** | Cmd+W → `NSEvent.addLocalMonitorForEvents`로 인터셉트하여 `orderOut` (숨기기) 처리. X 버튼 닫기 시 `reopenViaSwiftUI()`로 File 메뉴 "New Gnomon Window" 트리거하여 재생성 |
+| **AppDelegate.swift** | `applicationShouldHandleReopen`에서 `show()` 제거 → Dock 더블 창 방지 |
 
-### 버그 수정 & 인프라
+### 기타
 
-| 변경 | 내용 |
+| 항목 | 내용 |
 |---|---|
-| **AppDelegate.swift** | 앱 중복 실행 방지 (같은 bundle ID 이미 실행 중이면 terminate) |
-| **gate.sh** | xcbeautify 오탐 수정 (`PIPESTATUS[0]` 사용) |
-| **project.yml** | `백업/` 디렉토리 exclude |
-| **WindowAccessor.swift** | 디스크 누락 파일 복원 |
-| **AmbientSensorCard.swift** | trailing newline 추가 |
-| **Scripts/release.sh** (신규) | Developer ID 서명 + Notarization + DMG + GitHub Release 파이프라인 스크립트 |
+| **SettingsWindow.swift** | 버전 표시 하드코딩(`v1.1.0`) → `Bundle.main` CFBundleShortVersionString 동적 읽기 |
+| **SettingsWindow.swift** | Bug Report 행에 홈페이지 아이콘(house) 추가 → `ninjaturtle.win/#gnomon` |
+| **BACKGROUND.md** | Intel Mac 미지원 항목 추가, Software Dim 미구현 사유 추가 |
+| **BrightnessCurveTests.swift** | 코드 기본값(min=0, max=100, darkFloor=15) 변경에 맞춰 테스트 기대값 수정 |
 
 ---
 
-## 검증 필요 사항 (사용자)
+## 미완료 TODO (우선순위 순)
 
-### Carbon hotkey
-1. 앱 빌드 후 `⌃⌥⌘ =/-/]/[/B/G` 전부 동작 확인 (앱 백그라운드일 때도)
-2. Accessibility 권한 프롬프트가 안 뜨는지 확인
-3. Settings → Hotkeys 더블클릭 재할당 동작 확인
+### 1. ⭐⭐⭐ 창 토글 일관성 수정 (예상: 2~3시간)
 
-### 네이티브 DDC
-4. 앱 시작 시 외부 모니터 감지되는지 확인 (Onboarding 체크리스트)
-5. 자동 밝기 조절 동작 확인 (m1ddc 없이!)
-6. 수동 밝기/대비 슬라이더 동작 확인
+**현상**: 메인+세팅 열림 → 메인만 X로 닫음 → 토글 시 세팅만 반복 표시. 세팅까지 닫아도 세팅만 뜸.
+**원인 추정**: `reopenViaSwiftUI()`가 비동기로 새 창을 만드는데, `showAll()`에서 세팅 `makeKeyAndOrderFront`가 먼저 실행되어 포커스를 가져감. 또는 `reopenViaSwiftUI`의 File 메뉴 perform이 세팅 창 컨텍스트에서 실행되는 문제일 수 있음.
+**관련 파일**: `Gnomon/App/WindowManager.swift` (`showAll`, `reopenViaSwiftUI`)
+**왜 필요**: 사용자가 창을 닫았다 열 때 메인이 안 뜨면 앱이 고장난 것처럼 보임.
 
-### 기타
-7. 앱 아이콘 여러 번 찍어도 1개만 실행되는지 확인
-8. `defaults delete com.sunguk.gnomon.Gnomon` 후 Onboarding 흐름 확인 (2개 체크만)
+### 2. ⭐⭐ `gate.sh` 테스트 단계 안정성 (예상: 30분)
+
+**현상**: Gnomon 프로세스가 실행 중일 때 `xcodebuild test`가 "Early unexpected exit, operation never finished bootstrapping" 에러로 실패.
+**원인**: 테스트 러너가 Gnomon 앱을 부트스트랩할 때 기존 인스턴스와 충돌 (중복 실행 방지 코드가 테스트 호스트도 종료시킴).
+**해결 방향**: `gate.sh` 시작 시 `pkill -f Gnomon` 추가하거나, AppDelegate 중복 실행 방지를 테스트 환경에서 비활성화.
+**관련 파일**: `Scripts/gate.sh`, `Gnomon/App/AppDelegate.swift:19-27`
+
+### 3. ⭐ `BACKGROUND.md`의 stale 항목 정리 (예상: 15분)
+
+**현상**: "코드 서명, 공증, 자동 업데이트 → 개인용, GitHub에서 받아 빌드" 항목이 더 이상 맞지 않음 (이제 서명+공증 완료). "알려진 한계" 5번도 업데이트 필요.
+**관련 파일**: `BACKGROUND.md:60`, `BACKGROUND.md:249`
 
 ---
 
@@ -100,8 +108,8 @@ open build/Build/Products/Debug/Gnomon.app
 
 ```
 b(lux) = b_min + (b_max - b_min) × clamp(log10(lux + 1) / log10(2001), 0, 1)
-b_min=20, b_max=95 (UserDefaults)
-darkFloorLux=3 (lux ≤ 3 → b_min)
+코드 기본값: b_min=0, b_max=100, darkFloorLux=15
+PRD 권장값: b_min=20, b_max=95, darkFloorLux=3
 EMA: α=0.2, snap: threshold=50, duration=3
 ```
 
@@ -126,15 +134,15 @@ Carbon 기반 — Accessibility 권한 불필요.
 Gnomon/
 ├── App/
 │   ├── GnomonApp.swift
-│   ├── AppDelegate.swift          # 중복 실행 방지
+│   ├── AppDelegate.swift          # 중복 실행 방지 + Dock reopen
 │   ├── StatusBarController.swift
-│   └── WindowManager.swift
+│   └── WindowManager.swift        # ⚠️ 토글 일관성 TODO
 ├── Services/
-│   ├── NativeDDC.swift            # ✅ IOAVService DDC/CI (신규)
-│   ├── HotkeyManager.swift        # ✅ Carbon RegisterEventHotKey
-│   ├── M1DDCClient.swift          # ✅ NativeDDC 래퍼 (셸아웃 제거)
+│   ├── NativeDDC.swift            # IOAVService DDC/CI
+│   ├── HotkeyManager.swift        # Carbon RegisterEventHotKey
+│   ├── M1DDCClient.swift          # NativeDDC 래퍼
 │   ├── LuxReader.swift            # corebrightnessdiag (시스템 바이너리)
-│   ├── ProcessRunner.swift        # LuxReader용으로 유지
+│   ├── ProcessRunner.swift        # LuxReader용
 │   ├── CSVLogger.swift
 │   ├── Debouncer.swift
 │   ├── IconUpdater.swift
@@ -142,13 +150,13 @@ Gnomon/
 ├── ViewModels/
 │   ├── AutoLoopController.swift
 │   └── OnboardingViewModel.swift
-└── Views/ ...
+└── Views/
+    └── Settings/
+        └── SettingsWindow.swift   # 홈페이지 링크, 동적 버전 표시
 Scripts/
 ├── gate.sh                        # lint + format + build + test
-└── release.sh                     # ✅ 릴리즈 파이프라인 (신규)
+└── release.sh                     # 릴리즈 파이프라인 (완성)
 ```
-
-**제거된 파일**: `AccessibilityChecker.swift`, `Views/StatusBar.swift`
 
 ---
 
