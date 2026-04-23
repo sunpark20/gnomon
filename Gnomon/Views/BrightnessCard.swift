@@ -56,6 +56,7 @@ struct BrightnessCard: View {
             ))
             .toggleStyle(GoldToggleStyle())
             .labelsHidden()
+            .accessibilityLabel("Auto brightness")
             HStack(spacing: 6) {
                 Text("Auto").font(.caption).foregroundStyle(Theme.textSecondary)
             }

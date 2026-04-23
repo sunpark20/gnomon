@@ -167,7 +167,7 @@ struct AmbientSensorCard: View {
         }
         .foregroundStyle(Theme.textSecondary.opacity(0.6))
         .phaseAnimator([false, true]) { content, phase in
-            content.opacity(phase ? 1.0 : 0.15)
+            content.opacity(phase ? 1.0 : 0.3)
         } animation: { _ in
             .easeInOut(duration: 1.0)
         }
