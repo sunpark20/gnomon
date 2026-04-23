@@ -7,6 +7,7 @@
 //  applies deadband + EMA smoothing to avoid flicker.
 //
 
+import AppKit
 import Foundation
 import Observation
 
@@ -59,6 +60,11 @@ public final class AutoLoopController {
     private let contrastWriteDebouncer = Debouncer(delay: .milliseconds(200))
     public private(set) var manualOverrideAt: Date?
     public var contrast = 70 // PRD §5.2.2 fixed default (LG factory)
+    public private(set) var monitorConnected = false
+
+    private var wakeObserver: (any NSObjectProtocol)?
+    private var screenObserver: (any NSObjectProtocol)?
+    private var rediscoveryTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -112,16 +118,22 @@ public final class AutoLoopController {
             try? await logger.writeDiagnostics(info)
         }
 
+        monitorConnected = activeMonitor != nil
+
         nextSyncAt = Date().addingTimeInterval(syncInterval)
         scheduleSampling()
         scheduleSyncing()
+        installDisplayObservers()
     }
 
     public func stop() {
         sampleTask?.cancel()
         syncTask?.cancel()
+        rediscoveryTask?.cancel()
         sampleTask = nil
         syncTask = nil
+        rediscoveryTask = nil
+        removeDisplayObservers()
     }
 
     /// Reads UserDefaults values that Settings writes via @AppStorage and
@@ -152,6 +164,71 @@ public final class AutoLoopController {
                 luxCeiling: parameters.luxCeiling,
                 darkFloorLux: floor
             )
+        }
+    }
+
+    // MARK: - Display observers
+
+    private func installDisplayObservers() {
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.scheduleRediscovery(delay: 3) }
+        }
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.scheduleRediscovery(delay: 2) }
+        }
+    }
+
+    private func removeDisplayObservers() {
+        if let obs = wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(obs)
+            wakeObserver = nil
+        }
+        if let obs = screenObserver {
+            NotificationCenter.default.removeObserver(obs)
+            screenObserver = nil
+        }
+    }
+
+    private func scheduleRediscovery(delay: TimeInterval) {
+        rediscoveryTask?.cancel()
+        rediscoveryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
+            await self?.rediscoverMonitor()
+        }
+    }
+
+    @discardableResult
+    private func rediscoverMonitor() async -> MonitorID? {
+        let old = activeMonitor
+        do {
+            let monitors = try await ddcClient.listDisplays()
+            activeMonitor = monitors.first(where: { !$0.uuid.isEmpty })
+        } catch {
+            print("[rediscovery] listDisplays failed: \(error.localizedDescription)")
+            activeMonitor = nil
+        }
+        monitorConnected = activeMonitor != nil
+        if activeMonitor?.uuid != old?.uuid {
+            print("[rediscovery] monitor changed: \(old?.displayName ?? "nil") → \(activeMonitor?.displayName ?? "nil")")
+        }
+        return activeMonitor
+    }
+
+    private func writeBrightnessWithRetry(_ target: Int, on monitor: MonitorID) async throws {
+        do {
+            try await ddcClient.setBrightness(target, on: monitor)
+        } catch {
+            print("[ddc-retry] first write failed, rediscovering…")
+            if let fresh = await rediscoverMonitor() {
+                try await ddcClient.setBrightness(target, on: fresh)
+            } else {
+                throw error
+            }
         }
     }
 
@@ -194,12 +271,11 @@ public final class AutoLoopController {
         let last = lastSentBrightness ?? -9999
         guard abs(target - last) >= deadband else { return }
         do {
-            try await ddcClient.setBrightness(target, on: monitor)
+            try await writeBrightnessWithRetry(target, on: monitor)
             lastSentBrightness = target
             lastSyncAt = Date()
             print("[snap-sync] ema=\(Int(emaLux)) target=\(target) (bypassed interval)")
             await logEntry(sentBrightness: target, manualOverride: false)
-            // Reset the sync cadence so we don't double-write immediately after.
             syncTask?.cancel()
             updateNextSyncAt()
             scheduleSyncing()
@@ -237,13 +313,13 @@ public final class AutoLoopController {
         }
 
         do {
-            try await ddcClient.setBrightness(target, on: monitor)
+            try await writeBrightnessWithRetry(target, on: monitor)
             lastSentBrightness = target
             lastSyncAt = Date()
             print("[sync] lux=\(Int(currentLux)) ema=\(Int(emaLux)) target=\(target) sent=\(target)")
             await logEntry(sentBrightness: target, manualOverride: false)
         } catch {
-            print("[sync] DDC error: \(error.localizedDescription)")
+            print("[sync] DDC error (after retry): \(error.localizedDescription)")
         }
     }
 
@@ -302,10 +378,9 @@ public final class AutoLoopController {
     public func applyNow() {
         guard let monitor = activeMonitor else { return }
         let target = targetBrightness
-        let client = ddcClient
         Task { [weak self] in
             do {
-                try await client.setBrightness(target, on: monitor)
+                try await self?.writeBrightnessWithRetry(target, on: monitor)
                 self?.lastSentBrightness = target
                 self?.lastSyncAt = Date()
             } catch {
