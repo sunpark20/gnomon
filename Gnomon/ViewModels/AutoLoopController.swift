@@ -124,6 +124,13 @@ public final class AutoLoopController {
         scheduleSampling()
         scheduleSyncing()
         installDisplayObservers()
+
+        // 첫 샘플이 도착한 뒤 즉시 적용 — interval이 길어도 시작 직후 반영
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            await self?.syncIfNeeded()
+            self?.updateNextSyncAt()
+        }
     }
 
     public func stop() {
@@ -215,6 +222,10 @@ public final class AutoLoopController {
         monitorConnected = activeMonitor != nil
         if activeMonitor?.uuid != old?.uuid {
             print("[rediscovery] monitor changed: \(old?.displayName ?? "nil") → \(activeMonitor?.displayName ?? "nil")")
+            if activeMonitor != nil {
+                await syncIfNeeded()
+                updateNextSyncAt()
+            }
         }
         return activeMonitor
     }

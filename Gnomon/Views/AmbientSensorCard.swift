@@ -228,7 +228,7 @@ private struct QRCodeImage: View {
 #Preview("Disconnected") {
     AmbientSensorCard(
         lux: 26,
-        category: .dim,
+        category: .dimIndoor,
         message: .witty("The Goldshire Inn glows softer than this. Cozy."),
         monitorConnected: false
     )
