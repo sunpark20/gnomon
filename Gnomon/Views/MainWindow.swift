@@ -31,7 +31,8 @@ struct MainWindow: View {
                     AmbientSensorCard(
                         lux: controller.currentLux,
                         category: category,
-                        message: currentMessage
+                        message: currentMessage,
+                        monitorConnected: controller.monitorConnected
                     )
                     .frame(width: 280)
 

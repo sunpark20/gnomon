@@ -14,6 +14,7 @@ struct AmbientSensorCard: View {
     let lux: Double
     let category: LuxCategory
     let message: DisplayMessage
+    var monitorConnected = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,6 +26,11 @@ struct AmbientSensorCard: View {
                 Text("Mac Sensor")
                     .font(.title3.weight(.bold))
                     .foregroundStyle(Theme.textPrimary)
+            }
+
+            if !monitorConnected {
+                disconnectedBadge
+                    .padding(.top, 8)
             }
 
             Spacer(minLength: 0)
@@ -152,6 +158,21 @@ struct AmbientSensorCard: View {
         min(1, log10(max(1, lux)) / log10(2001))
     }
 
+    private var disconnectedBadge: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "bolt.slash.fill")
+                .font(.system(size: 11))
+            Text("Disconnected")
+                .font(.caption2.weight(.medium))
+        }
+        .foregroundStyle(Theme.textSecondary.opacity(0.6))
+        .phaseAnimator([false, true]) { content, phase in
+            content.opacity(phase ? 1.0 : 0.15)
+        } animation: { _ in
+            .easeInOut(duration: 1.0)
+        }
+    }
+
     private var gaugeFraction: Double {
         // Log scale mirror of the brightness curve so the bar tracks perception.
         let ceiling = 2000.0
@@ -199,6 +220,17 @@ private struct QRCodeImage: View {
         lux: 17,
         category: .veryDim,
         message: .witty("Night-raid-ready illumination. Grab your gear.")
+    )
+    .padding()
+    .background(Theme.background)
+}
+
+#Preview("Disconnected") {
+    AmbientSensorCard(
+        lux: 26,
+        category: .dim,
+        message: .witty("The Goldshire Inn glows softer than this. Cozy."),
+        monitorConnected: false
     )
     .padding()
     .background(Theme.background)
