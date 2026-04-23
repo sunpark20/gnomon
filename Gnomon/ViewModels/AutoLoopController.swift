@@ -60,11 +60,12 @@ public final class AutoLoopController {
     private let contrastWriteDebouncer = Debouncer(delay: .milliseconds(200))
     public private(set) var manualOverrideAt: Date?
     public var contrast = 70 // PRD §5.2.2 fixed default (LG factory)
-    public private(set) var monitorConnected = false
+    public var monitorConnected: Bool { activeMonitor != nil }
 
     private var wakeObserver: (any NSObjectProtocol)?
     private var screenObserver: (any NSObjectProtocol)?
-    private var rediscoveryTask: Task<Void, Never>?
+    private var initialSyncTask: Task<Void, Never>?
+    private let rediscoveryDebouncer = Debouncer(delay: .seconds(2))
 
     // MARK: - Init
 
@@ -86,9 +87,10 @@ public final class AutoLoopController {
         // rather than waiting for the user to reopen Settings.
         loadPersistedPreferences()
 
+        var monitors: [MonitorID] = []
         do {
-            let monitors = try await ddcClient.listDisplays()
-            activeMonitor = monitors.first(where: { !$0.uuid.isEmpty })
+            monitors = try await ddcClient.listDisplays()
+            activeMonitor = pickMonitor(from: monitors)
             if let monitor = activeMonitor {
                 lastSentBrightness = try? await ddcClient.getBrightness(on: monitor)
                 // m1ddc occasionally returns 0 when the read transiently fails;
@@ -104,11 +106,7 @@ public final class AutoLoopController {
             print("[AutoLoop] start: discovery failed: \(error.localizedDescription)")
         }
 
-        // Prune old log rows + write system diagnostics once at startup.
-        // Ignore errors — logging is non-critical.
-        let displayNames = await (try? ddcClient.listDisplays())?.map {
-            "\($0.displayName) [\($0.uuid)]"
-        } ?? []
+        let displayNames = monitors.map { "\($0.displayName) [\($0.uuid)]" }
         let info = SystemInfo.collect(activeDisplays: displayNames)
         Task.detached { [logger] in
             // ensureFile first: upgrades the header if the schema changed and
@@ -118,15 +116,12 @@ public final class AutoLoopController {
             try? await logger.writeDiagnostics(info)
         }
 
-        monitorConnected = activeMonitor != nil
-
         nextSyncAt = Date().addingTimeInterval(syncInterval)
         scheduleSampling()
         scheduleSyncing()
         installDisplayObservers()
 
-        // 첫 샘플이 도착한 뒤 즉시 적용 — interval이 길어도 시작 직후 반영
-        Task { [weak self] in
+        initialSyncTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
             await self?.syncIfNeeded()
             self?.updateNextSyncAt()
@@ -136,10 +131,11 @@ public final class AutoLoopController {
     public func stop() {
         sampleTask?.cancel()
         syncTask?.cancel()
-        rediscoveryTask?.cancel()
+        initialSyncTask?.cancel()
+        rediscoveryDebouncer.cancel()
         sampleTask = nil
         syncTask = nil
-        rediscoveryTask = nil
+        initialSyncTask = nil
         removeDisplayObservers()
     }
 
@@ -174,18 +170,32 @@ public final class AutoLoopController {
         }
     }
 
+    private func pickMonitor(from monitors: [MonitorID]) -> MonitorID? {
+        monitors.first(where: { !$0.uuid.isEmpty })
+    }
+
     // MARK: - Display observers
 
     private func installDisplayObservers() {
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.scheduleRediscovery(delay: 3) }
+            Task { @MainActor in
+                guard let self else { return }
+                self.rediscoveryDebouncer.schedule { [weak self] in
+                    await self?.rediscoverMonitor()
+                }
+            }
         }
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.scheduleRediscovery(delay: 2) }
+            Task { @MainActor in
+                guard let self else { return }
+                self.rediscoveryDebouncer.schedule { [weak self] in
+                    await self?.rediscoverMonitor()
+                }
+            }
         }
     }
 
@@ -200,26 +210,16 @@ public final class AutoLoopController {
         }
     }
 
-    private func scheduleRediscovery(delay: TimeInterval) {
-        rediscoveryTask?.cancel()
-        rediscoveryTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(delay))
-            guard !Task.isCancelled else { return }
-            await self?.rediscoverMonitor()
-        }
-    }
-
     @discardableResult
     private func rediscoverMonitor() async -> MonitorID? {
         let old = activeMonitor
         do {
             let monitors = try await ddcClient.listDisplays()
-            activeMonitor = monitors.first(where: { !$0.uuid.isEmpty })
+            activeMonitor = pickMonitor(from: monitors)
         } catch {
             print("[rediscovery] listDisplays failed: \(error.localizedDescription)")
             activeMonitor = nil
         }
-        monitorConnected = activeMonitor != nil
         if activeMonitor?.uuid != old?.uuid {
             print("[rediscovery] monitor changed: \(old?.displayName ?? "nil") → \(activeMonitor?.displayName ?? "nil")")
             if activeMonitor != nil {
@@ -360,10 +360,9 @@ public final class AutoLoopController {
         lastSentBrightness = clamped
         targetBrightness = clamped
         guard let monitor = activeMonitor else { return }
-        let client = ddcClient
         manualWriteDebouncer.schedule { [weak self] in
             do {
-                try await client.setBrightness(clamped, on: monitor)
+                try await self?.writeBrightnessWithRetry(clamped, on: monitor)
                 self?.lastSyncAt = Date()
                 await self?.logEntry(sentBrightness: clamped, manualOverride: true)
             } catch {

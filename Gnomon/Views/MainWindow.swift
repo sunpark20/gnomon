@@ -3,7 +3,7 @@
 //  Gnomon
 //
 //  Single-window main UI. Composes the ambient / brightness / contrast cards.
-//  Subscribes to AutoLoopController and re-renders every 100ms via TimelineView.
+//  Subscribes to AutoLoopController and re-renders every 1s via TimelineView.
 //
 
 import SwiftUI
@@ -20,7 +20,7 @@ struct MainWindow: View {
     @State private var lastTurnIndex: Int = -1
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.1)) { context in
+        TimelineView(.periodic(from: .now, by: 1.0)) { context in
             let category = LuxCategory.classify(controller.emaLux)
             let elapsed = max(0, context.date.timeIntervalSince(messageEpoch))
             let turnIndex = Int(elapsed / turnDuration)
