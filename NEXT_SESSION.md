@@ -1,6 +1,6 @@
 # 다음 세션 핸드오프
 
-> 작성: 2026-04-21 (세션 4)
+> 작성: 2026-04-24 (세션 5)
 > 이 문서 하나만으로 새 세션이 컨텍스트 없이 이어받을 수 있게 작성됨.
 
 ---
@@ -20,8 +20,8 @@
 - 경로: `/Users/sunguk/0.code/0.shipping/moniterpicker/gnomon/`
 - GitHub: https://github.com/sunpark20/gnomon (main 브랜치)
 - 최신 태그: **v1.7.0** (GitHub Release 배포 완료, 공증+DMG)
-- 최신 커밋: `879a0f2` — push 완료
-- 미커밋: 없음 (working tree clean)
+- 최신 커밋: `a21ff80` — **push 안 됨** (origin보다 6커밋 ahead)
+- 미커밋: `.claude/settings.json` (untracked), `bgraw.md`, `bgwiki.md`
 - Gate: `./Scripts/gate.sh --skip-tests` **3/3 통과** (lint / format / build)
   - 테스트는 `LSUIElement: YES` 변경으로 부트스트랩 실패 — 별도 수정 필요
 - 홈페이지: https://homeninja.vercel.app/#gnomon
@@ -54,30 +54,35 @@ defaults write com.sunguk.gnomon.Gnomon onboardingCompletedAt -float 0 && open /
 
 ---
 
-## 이번 세션에서 완성된 것 (v1.6.0 → v1.7.0)
+## 이번 세션에서 완성된 것 (세션 5 — 코드 품질 정리)
 
-### UI 대규모 폴리싱 ✅
-
-| 항목 | 내용 |
-|---|---|
-| **독 아이콘 제거** | `LSUIElement: YES` + 프로그래밍 독 아이콘(`SundialIconRenderer .dock`) 제거. 메뉴바 전용 앱으로 전환 (`project.yml`, `AppDelegate.swift`, `IconUpdater.swift`, `WindowManager.swift`) |
-| **커스텀 GoldToggleStyle** | macOS 포커스 해제 시 Toggle/Slider가 회색으로 변하는 문제 해결. `Theme.swift`에 `GoldToggleStyle`, `GoldSlider` 추가. 그라데이션(`gold 60%→100%`) 통일 |
-| **메시지 레이아웃 안정화** | `AmbientSensorCard`의 위트 메시지를 `.overlay(alignment: .bottom)`으로 분리. Spacer 분배와 완전 독립 — 텍스트 길이 변경 시 위쪽 게이지/lux 흔들림 없음 |
-| **문구 교체 10초 절대 규칙** | `MainWindow.swift` — `@State currentMessage` + `onChange(of: turnIndex)`. 카테고리 변경 시 즉시 바뀌지 않고 10초 경과 후에만 갱신 |
-| **Settings 전면 영어화** | `"Enter로 적용"` → `"Press Enter"`, 한 줄 요약 통합, CalibrationTip `.orange` → `Theme.gold` |
-| **Settings 구조 정리** | 내부 X 버튼 제거 (윈도우 타이틀바 빨간 닫기로 통일), header dead code 정리, Bug Report에 버전 trailing 배치 |
-| **Sync Options 개선** | 프리셋 `5s/30s/60s/300s`, 필드 70px 통일, `s` 단위 표시, 팁 영역 ZStack으로 높이 안정화 |
-| **ESC 편집 취소** | BrightnessCard, ContrastCard, Settings 전체 TextField에 `.onKeyPress(.escape)` 적용 |
-| **온보딩 윈도우 크기** | 같은 WindowGroup 내에서 `WindowAccessor`로 520×580 강제 리사이즈 + center |
-| **홈페이지 URL** | `ninjaturtle.win` → `homeninja.vercel.app/#gnomon` |
-| **BACKGROUND.md** | 한 줄 요약에 눈 아이콘 추가 |
-| **폰트 크기 통일** | Brightness/Contrast 수치 둘 다 56pt, 편집모드 TextField도 56pt |
-
-### 스킬 생성 ✅
+### `/simplify` 리팩토링 ✅ (`fdacc5f`)
 
 | 항목 | 내용 |
 |---|---|
-| **su-swift-check-ui** | SwiftUI UI 통일성/접근성/구조 감사 스킬 (`~/.claude/skills/su-swift-check-ui/`) |
+| **중복 상태 제거** | `monitorConnected` 저장 프로퍼티 → `activeMonitor != nil` 계산 프로퍼티. 상태 동기화 드리프트 원천 차단 (`AutoLoopController.swift:63`) |
+| **Debouncer 재사용** | 수동 Task cancel/sleep 패턴의 `scheduleRediscovery` → 기존 `Debouncer` 유틸리티로 대체. `rediscoveryTask` 프로퍼티 제거 |
+| **시작 I/O 절감** | `start()`에서 `listDisplays()` 2회 호출 → 1회로 통합. 결과를 진단 로깅에 재사용 |
+| **start/stop 레이스 수정** | fire-and-forget 초기 sync Task → `initialSyncTask`에 저장, `stop()`에서 cancel |
+| **retry 일관성** | `userSetBrightness`도 `writeBrightnessWithRetry` 사용하도록 통일 (다른 write 경로와 동일) |
+| **모니터 선택 추출** | `monitors.first(where: { !$0.uuid.isEmpty })` 중복 → `pickMonitor(from:)` 헬퍼 |
+| **TimelineView 최적화** | 0.1s → 1.0s 틱 (10x body 평가 감소, 실제 데이터 주기와 일치) (`MainWindow.swift:23`) |
+
+### `/su-swift-check-ui` 감사 + 접근성 수정 ✅ (`a21ff80`)
+
+| 항목 | 내용 |
+|---|---|
+| **Toggle 접근성** | `BrightnessCard` Auto 토글에 `.accessibilityLabel("Auto brightness")` 추가 |
+| **Disconnected badge 대비** | 최소 opacity 0.15 → 0.3 (WCAG AA 개선) (`AmbientSensorCard.swift:170`) |
+| **UI 감사 보고** | 색상 6건, 폰트 1건, 패딩 1건, 구조 리스크 3건, 접근성 3건 발견 — 아래 TODO에 반영 |
+
+### `/security-review` ✅
+
+보안 취약점 0건. 로컬 전용 앱, 공격 표면 없음 확인.
+
+### `/fewer-permission-prompts` ✅
+
+`.claude/settings.json` 생성. 읽기 전용 명령 5개 패턴 등록 (swiftlint, security, sips).
 
 ---
 
@@ -96,13 +101,19 @@ defaults write com.sunguk.gnomon.Gnomon onboardingCompletedAt -float 0 && open /
 **해결 방향**: `release.sh`에서 `--skip-tests`로 임시 우회 중. AppDelegate 중복 실행 방지를 테스트 환경에서 비활성화하거나, 테스트 타겟에 `LSUIElement: NO` 별도 설정.
 **관련 파일**: `Scripts/gate.sh`, `Scripts/release.sh:58`, `Gnomon/App/AppDelegate.swift:19-27`
 
-### 3. ⭐⭐ 카드 패딩/간격 통일 (예상: 30분)
+### 3. ⭐⭐ 카드 패딩/간격/폰트 통일 (예상: 30분)
 
-**현상**: AmbientSensorCard `.padding(32)` vs BrightnessCard/ContrastCard `.padding(24)`. 헤더 spacing도 10 vs 8 혼재.
-**관련 파일**: `AmbientSensorCard.swift:76`, `BrightnessCard.swift:30`, `ContrastCard.swift:23`
-**왜 필요**: UI 감사에서 발견된 통일성 불일치. 사용자가 나중에 따로 지시할 예정.
+**현상**: AmbientSensorCard `.padding(32)` vs BrightnessCard/ContrastCard `.padding(24)`. 헤더 spacing 10 vs 8 혼재. 카드 헤더 폰트도 AmbientSensorCard `.title3.bold` vs B/C `.headline` 불일치.
+**관련 파일**: `AmbientSensorCard.swift:78,24,27`, `BrightnessCard.swift:30,44,49`, `ContrastCard.swift:23,30,34`
+**왜 필요**: UI 감사(`/su-swift-check-ui`)에서 발견된 통일성 불일치.
 
-### 4. ⭐ `BACKGROUND.md` stale 항목 정리 (예상: 15분)
+### 4. ⭐ UI 감사 후속 — 하드코딩 색상/접근성 (예상: 30분)
+
+**현상**: `HotkeyRow.swift:90,96`에서 `NSColor.systemOrange` 사용 (Theme.gold 우회). `OnboardingWindow.swift:64`에서 `.white`, `:116`에서 `.red` 하드코딩 (Theme.error 미정의). 여러 아이콘 버튼에 `.help()` 및 `.accessibilityLabel()` 누락.
+**관련 파일**: `HotkeyRow.swift`, `OnboardingWindow.swift`, `BrightnessCard.swift:145`, `ContrastCard.swift:64`
+**왜 필요**: 접근성 및 Theme 일관성. NSView 내 NSColor↔Theme 변환 필요.
+
+### 5. ⭐ `BACKGROUND.md` stale 항목 정리 (예상: 15분)
 
 **현상**: "코드 서명, 공증 → 개인용" 항목이 더 이상 맞지 않음 (이제 서명+공증 완료).
 **관련 파일**: `BACKGROUND.md`
@@ -146,10 +157,10 @@ Gnomon/
 │   └── SundialIconRenderer.swift  # .dock 스타일 미사용, .menuBar만 활성
 ├── Views/
 │   ├── Theme.swift                # GoldToggleStyle, GoldSlider 포함
-│   ├── AmbientSensorCard.swift    # overlay 메시지 레이아웃
-│   ├── BrightnessCard.swift       # GoldSlider + ESC 편집 취소
+│   ├── AmbientSensorCard.swift    # overlay 메시지 + Disconnected badge
+│   ├── BrightnessCard.swift       # GoldSlider + accessibilityLabel
 │   ├── ContrastCard.swift         # GoldSlider + ESC 편집 취소
-│   ├── MainWindow.swift           # 10초 메시지 교체 로직
+│   ├── MainWindow.swift           # 1s TimelineView + 10초 메시지 교체
 │   ├── Onboarding/
 │   │   └── OnboardingWindow.swift # WindowAccessor 520×580 리사이즈
 │   └── Settings/

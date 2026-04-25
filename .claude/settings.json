@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(swiftlint --strict *)",
+      "Bash(swiftlint lint *)",
+      "Bash(security find-identity *)",
+      "Bash(security find-certificate *)",
+      "Bash(sips -g *)"
+    ]
+  }
+}
