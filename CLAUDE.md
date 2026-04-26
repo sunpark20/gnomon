@@ -19,6 +19,20 @@ Gnomon(DDC 기반 외장 모니터 자동 밝기 조절 앱)을 Century Iris(감
 - Gnomon 기존 패턴(EMA, Debouncer, BrightnessCurve, dual-loop) 최대한 재사용.
 - @MainActor로 상태 관리 통일. CSVLogger만 actor 격리.
 
+## 코딩 규칙 (SwiftLint + SwiftFormat 강제)
+- gate.sh가 `swiftlint --strict` + `swiftformat --lint`를 실행. 둘 다 통과해야 빌드 성공.
+- 줄 길이: 120자 warning, 160자 error. URL 제외, 주석 포함.
+- indent 4칸, LF 줄바꿈, trailing whitespace 금지.
+- `force_unwrapping: error` — force unwrap 절대 금지. guard/if let 사용.
+- 함수 본문: 50줄 warning, 100줄 error. 길면 분리.
+- 파일 길이: 400줄 warning, 600줄 error.
+- cyclomatic complexity: 12 warning, 20 error.
+- 짧은 변수명 허용 (`b`, `c`, `x` 등 수학 도메인용).
+- `self.` 제거 (SwiftFormat --self remove).
+- import 순서: testable import은 하단으로 (SwiftFormat --importgrouping testable-bottom).
+- wrap: 인수/파라미터/컬렉션은 첫 인수 전에 줄바꿈 (before-first).
+- 설정 파일: `.swiftlint.yml`, `.swiftformat` (프로젝트 루트)
+
 ## 개발 프로세스
 - 커밋 메시지: conventional commits (feat:, fix:, docs:, refactor:)
 - 변경 후 빌드 통과 확인 필수
