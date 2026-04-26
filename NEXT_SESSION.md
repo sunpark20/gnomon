@@ -1,179 +1,133 @@
 # 다음 세션 핸드오프
 
-> 작성: 2026-04-24 (세션 5)
+> 작성: 2026-04-26 (세션 6 — Century Iris PoC + 리서치)
 > 이 문서 하나만으로 새 세션이 컨텍스트 없이 이어받을 수 있게 작성됨.
 
 ---
 
 ## TL;DR — 새 세션에서 바로 할 일
 
-**창 토글 일관성 문제 수정이 1순위.**
-
-메인+세팅 둘 다 열린 상태에서 메인만 X로 닫고 토글하면 세팅만 반복 표시되는 버그. `WindowManager.swift`의 `showAll()` → `reopenViaSwiftUI()` 호출 타이밍/포커스 이슈.
-
-시작점: `Gnomon/App/WindowManager.swift` — `showAll()`, `reopenViaSwiftUI()`
+**`/su-harness`로 Century Iris 구현 시작.** Gnomon → Century Iris 전환 (DDC→감마, subprocess→IORegistry, sandbox 적용). 이번 세션에서 PoC 검증 + 알고리즘 리서치 + 제품 결정 완료. 하네스 설계부터 시작.
 
 ---
 
 ## 프로젝트 현재 상태
 
-- 경로: `/Users/sunguk/0.code/0.shipping/moniterpicker/gnomon/`
-- GitHub: https://github.com/sunpark20/gnomon (main 브랜치)
-- 최신 태그: **v1.7.0** (GitHub Release 배포 완료, 공증+DMG)
-- 최신 커밋: `a21ff80` — **push 안 됨** (origin보다 6커밋 ahead)
-- 미커밋: `.claude/settings.json` (untracked), `bgraw.md`, `bgwiki.md`
-- Gate: `./Scripts/gate.sh --skip-tests` **3/3 통과** (lint / format / build)
-  - 테스트는 `LSUIElement: YES` 변경으로 부트스트랩 실패 — 별도 수정 필요
-- 홈페이지: https://homeninja.vercel.app/#gnomon
-
-### 배포 파이프라인
-
-```bash
-pkill -f Gnomon
-xcodegen generate
-./Scripts/release.sh  # gate(--skip-tests) → archive → notarize → staple → DMG → GitHub Release
-```
-
-Apple Developer 인증 정보:
-- Team ID: `GA2LMK5XL2`
-- Signing Identity: `Developer ID Application: sunguk park (GA2LMK5XL2)`
-- Notary Profile: `gnomon-notary` (Keychain에 저장됨)
-
-빌드:
-```bash
-cd /Users/sunguk/0.code/0.shipping/moniterpicker/gnomon
-xcodegen generate
-xcodebuild -scheme Gnomon -configuration Debug build
-open /Users/sunguk/Library/Developer/Xcode/DerivedData/Gnomon-cirxpksfouhoawbyhyalyvuxfegs/Build/Products/Debug/Gnomon.app
-```
-
-온보딩 테스트 (다른 설정 초기화 없이):
-```bash
-defaults write com.sunguk.gnomon.Gnomon onboardingCompletedAt -float 0 && open /path/to/Gnomon.app
-```
+- 경로: `/Users/sunguk/0.code/gnomoniter` (Gnomon 코드 카피본, 여기서 Century Iris로 전환)
+- 브랜치: `main`
+- **이 리포는 Gnomon 원본이 아닌 카피본.** Century Iris 새 프로젝트로 사용.
+- 번들 ID: `com.sunguk.centuryiris` (변경 예정)
+- 앱 이름: **Century Iris**
+- 부제(한국어): 외장 모니터 자동 밝기 조절
+- 부제(영어): Auto Monitor Brightness
 
 ---
 
-## 이번 세션에서 완성된 것 (세션 5 — 코드 품질 정리)
-
-### `/simplify` 리팩토링 ✅ (`fdacc5f`)
+## 이번 세션 성과 (세션 6)
 
 | 항목 | 내용 |
 |---|---|
-| **중복 상태 제거** | `monitorConnected` 저장 프로퍼티 → `activeMonitor != nil` 계산 프로퍼티. 상태 동기화 드리프트 원천 차단 (`AutoLoopController.swift:63`) |
-| **Debouncer 재사용** | 수동 Task cancel/sleep 패턴의 `scheduleRediscovery` → 기존 `Debouncer` 유틸리티로 대체. `rediscoveryTask` 프로퍼티 제거 |
-| **시작 I/O 절감** | `start()`에서 `listDisplays()` 2회 호출 → 1회로 통합. 결과를 진단 로깅에 재사용 |
-| **start/stop 레이스 수정** | fire-and-forget 초기 sync Task → `initialSyncTask`에 저장, `stop()`에서 cancel |
-| **retry 일관성** | `userSetBrightness`도 `writeBrightnessWithRetry` 사용하도록 통일 (다른 write 경로와 동일) |
-| **모니터 선택 추출** | `monitors.first(where: { !$0.uuid.isEmpty })` 중복 → `pickMonitor(from:)` 헬퍼 |
-| **TimelineView 최적화** | 0.1s → 1.0s 틱 (10x body 평가 감소, 실제 데이터 주기와 일치) (`MainWindow.swift:23`) |
-
-### `/su-swift-check-ui` 감사 + 접근성 수정 ✅ (`a21ff80`)
-
-| 항목 | 내용 |
-|---|---|
-| **Toggle 접근성** | `BrightnessCard` Auto 토글에 `.accessibilityLabel("Auto brightness")` 추가 |
-| **Disconnected badge 대비** | 최소 opacity 0.15 → 0.3 (WCAG AA 개선) (`AmbientSensorCard.swift:170`) |
-| **UI 감사 보고** | 색상 6건, 폰트 1건, 패딩 1건, 구조 리스크 3건, 접근성 3건 발견 — 아래 TODO에 반영 |
-
-### `/security-review` ✅
-
-보안 취약점 0건. 로컬 전용 앱, 공격 표면 없음 확인.
-
-### `/fewer-permission-prompts` ✅
-
-`.claude/settings.json` 생성. 읽기 전용 명령 5개 패턴 등록 (swiftlint, security, sips).
+| **PoC 검증** | 조도센서 IORegistry 읽기 sandbox 동작 확인 (4040/4040, 100%), 감마 디밍 sandbox 동작 확인. `PoC/main.swift` |
+| **알고리즘 리서치** | Kelvin→RGB (Tanner Helland), 통합 감마 테이블 공식, Lux→밝기/CCT 매핑, 멜라토닌 보호 공식. `research/software-dimming-algorithms.md` |
+| **오픈소스 조사** | MonitorControl(33K), Lunar(5.5K), OpenDisplay(MIT) 등 감마/센서 구현 참고 소스 확보 |
+| **학술 논문 검증** | Choi&Suk 2014 (CCT 공식), Kim 2018 (밝기 데이터), Gimenez 2022 (멜라토닌) — Semantic Scholar로 인용 검증 |
+| **제품 결정** | 밝기+색온도 2개만 (채도/명암 제외), 캘리브레이션 제거, 명암은 모니터 OSD로 사용자 직접 |
+| **App Store 메타데이터** | `appstore/metadata.md` 생성 (이름, 부제, 한/영 설명, 키워드, 심사 메모) |
+| **배경 문서** | `bgraw.md`, `bgwiki.md` 갱신 (DDC vs 감마 비교, 캘리브레이션 방법, 파라미터 확정, 캘리브레이션 제거) |
 
 ---
 
 ## 미완료 TODO (우선순위 순)
 
-### 1. ⭐⭐⭐ 창 토글 일관성 수정 (예상: 2~3시간)
+### 1. ⭐⭐⭐ Century Iris 구현 — /su-harness로 진행 (예상: 1~2주)
 
-**현상**: 메인+세팅 열림 → 메인만 X로 닫음 → 토글 시 세팅만 반복 표시.
-**관련 파일**: `Gnomon/App/WindowManager.swift` (`showAll`, `reopenViaSwiftUI`)
-**왜 필요**: 사용자가 창을 닫았다 열 때 메인이 안 뜨면 앱이 고장난 것처럼 보임.
+사용자가 하네스 방식으로 진행하겠다고 결정. 하네스 설계부터 시작.
 
-### 2. ⭐⭐ `LSUIElement` 환경에서 테스트 부트스트랩 수정 (예상: 1시간)
+**주요 구현 단계:**
 
-**현상**: `LSUIElement: YES`로 변경 후 `xcodebuild test`가 "Early unexpected exit, operation never finished bootstrapping" 에러.
-**원인**: 테스트 러너가 독 아이콘 없는 앱과 연결 실패 + 중복 실행 방지 코드 충돌.
-**해결 방향**: `release.sh`에서 `--skip-tests`로 임시 우회 중. AppDelegate 중복 실행 방지를 테스트 환경에서 비활성화하거나, 테스트 타겟에 `LSUIElement: NO` 별도 설정.
-**관련 파일**: `Scripts/gate.sh`, `Scripts/release.sh:58`, `Gnomon/App/AppDelegate.swift:19-27`
+| # | 작업 | 핵심 파일 |
+|---|---|---|
+| 1 | LuxReader 교체 (subprocess→IORegistry) | `Gnomon/Services/LuxReader.swift` |
+| 2 | DDC→GammaController 교체 | `Gnomon/Services/NativeDDC.swift`, `M1DDCClient.swift` → 새 GammaController |
+| 3 | 색온도 추가 (Tanner Helland + Kruithof) | 새 파일 또는 GammaController 내 |
+| 4 | Sandbox 적용 | `Entitlements.plist`, `project.yml` |
+| 5 | UI 수정 | Contrast 카드 제거, CCT 표시 추가, 온보딩 변경 |
+| 6 | 번들 ID/이름 변경 | `project.yml`, `Info.plist` |
+| 7 | 테스트 | 외장 모니터, Night Shift 충돌, crash recovery |
+| 8 | App Store 제출 | 스크린샷, 메타데이터, 심사 |
 
-### 3. ⭐⭐ 카드 패딩/간격/폰트 통일 (예상: 30분)
+**핵심 결정 사항 (이미 확정):**
+- 밝기: Gnomon 로그 곡선 재사용, 캘리브레이션 없음
+- 색온도: Kruithof 테이블 (lux→CCT) + Tanner Helland (CCT→RGB)
+- 명암: 모니터 OSD (사용자 직접, 온보딩 안내만)
+- 채도: 건드리지 않음
+- 감마 최소값: 0.08 (완전 검정 방지)
 
-**현상**: AmbientSensorCard `.padding(32)` vs BrightnessCard/ContrastCard `.padding(24)`. 헤더 spacing 10 vs 8 혼재. 카드 헤더 폰트도 AmbientSensorCard `.title3.bold` vs B/C `.headline` 불일치.
-**관련 파일**: `AmbientSensorCard.swift:78,24,27`, `BrightnessCard.swift:30,44,49`, `ContrastCard.swift:23,30,34`
-**왜 필요**: UI 감사(`/su-swift-check-ui`)에서 발견된 통일성 불일치.
-
-### 4. ⭐ UI 감사 후속 — 하드코딩 색상/접근성 (예상: 30분)
-
-**현상**: `HotkeyRow.swift:90,96`에서 `NSColor.systemOrange` 사용 (Theme.gold 우회). `OnboardingWindow.swift:64`에서 `.white`, `:116`에서 `.red` 하드코딩 (Theme.error 미정의). 여러 아이콘 버튼에 `.help()` 및 `.accessibilityLabel()` 누락.
-**관련 파일**: `HotkeyRow.swift`, `OnboardingWindow.swift`, `BrightnessCard.swift:145`, `ContrastCard.swift:64`
-**왜 필요**: 접근성 및 Theme 일관성. NSView 내 NSColor↔Theme 변환 필요.
-
-### 5. ⭐ `BACKGROUND.md` stale 항목 정리 (예상: 15분)
-
-**현상**: "코드 서명, 공증 → 개인용" 항목이 더 이상 맞지 않음 (이제 서명+공증 완료).
-**관련 파일**: `BACKGROUND.md`
-
----
-
-## 활성 곡선 (PRD §5.2.1 v0.4)
-
-```
-b(lux) = b_min + (b_max - b_min) × clamp(log10(lux + 1) / log10(2001), 0, 1)
-코드 기본값: b_min=0, b_max=100, darkFloorLux=15
-EMA: α=0.2, snap: threshold=50, duration=3
-```
+**참조 문서:**
+- `research/software-dimming-algorithms.md` — 모든 공식과 출처
+- `appstore/metadata.md` — App Store 메타데이터
+- `PoC/main.swift` — 동작 확인된 센서+감마 코드
 
 ---
 
-## 현재 기본 단축키
+## 핵심 기술 참조
 
-| 액션 | 키 |
-|---|---|
-| Brightness Up/Down | `⌃⌥⌘ =` / `⌃⌥⌘ -` |
-| Contrast Up/Down | `⌃⌥⌘ ]` / `⌃⌥⌘ [` |
-| Toggle Auto | `⌃⌥⌘ B` |
-| Toggle Window | `⌃⌥⌘ G` |
+### 조도센서 (IORegistry, sandbox 동작 확인됨)
+```swift
+IOServiceMatching("IOMobileFramebufferShim")
+IORegistryEntryCreateCFProperty(service, "AmbientBrightness", ...)
+lux = Double(raw) / 65536.0
+```
 
-Carbon 기반 — Accessibility 권한 불필요.
+### 감마 디밍 (CGSetDisplayTransferByTable, sandbox 동작 확인됨)
+```swift
+CGGetDisplayTransferByTable(displayID, 256, &origR, &origG, &origB, &count)
+let scaled = orig.map { $0 * factor }
+CGSetDisplayTransferByTable(displayID, count, scaledR, scaledG, scaledB)
+CGDisplayRestoreColorSyncSettings()  // 복원
+```
+
+### 통합 감마 테이블 (밝기 + 색온도)
+```swift
+let (rMul, gMul, bMul) = kelvinToRGB(temperature)
+for i in 0..<256 {
+    let v = Float(i) / 255.0
+    r[i] = clamp(v * brightness * rMul)
+    g[i] = clamp(v * brightness * gMul)
+    b[i] = clamp(v * brightness * bMul)
+}
+```
 
 ---
 
 ## 주요 파일 맵
 
 ```
-Gnomon/
-├── App/
-│   ├── GnomonApp.swift            # WindowGroup + 온보딩/메인 조건분기
-│   ├── AppDelegate.swift          # 중복 실행 방지 + 메뉴바 셋업
-│   ├── StatusBarController.swift
-│   └── WindowManager.swift        # ⚠️ 토글 일관성 TODO
-├── Services/
-│   ├── IconUpdater.swift          # 메뉴바 아이콘만 (독 아이콘 제거됨)
-│   └── SundialIconRenderer.swift  # .dock 스타일 미사용, .menuBar만 활성
-├── Views/
-│   ├── Theme.swift                # GoldToggleStyle, GoldSlider 포함
-│   ├── AmbientSensorCard.swift    # overlay 메시지 + Disconnected badge
-│   ├── BrightnessCard.swift       # GoldSlider + accessibilityLabel
-│   ├── ContrastCard.swift         # GoldSlider + ESC 편집 취소
-│   ├── MainWindow.swift           # 1s TimelineView + 10초 메시지 교체
-│   ├── Onboarding/
-│   │   └── OnboardingWindow.swift # WindowAccessor 520×580 리사이즈
-│   └── Settings/
-│       └── SettingsWindow.swift   # 영어 통일, ESC 포커스 해제
-Scripts/
-├── gate.sh                        # --skip-tests 옵션 지원
-└── release.sh                     # gate --skip-tests로 호출
+PoC/                               # PoC 코드 (sandbox 검증 완료)
+├── main.swift                     # 센서+감마 PoC 앱
+├── Entitlements.plist             # com.apple.security.app-sandbox
+├── Info.plist
+└── build_and_run.sh
+
+appstore/
+└── metadata.md                    # Century Iris App Store 메타데이터
+
+research/
+├── adaptive-curves.md             # Gnomon 기존 곡선 학술 근거
+└── software-dimming-algorithms.md # 감마/CCT/멜라토닌 공식 + 출처
+
+Gnomon/Services/                   # 교체 대상
+├── NativeDDC.swift                # 제거 → GammaController
+├── M1DDCClient.swift              # 제거 → GammaController
+└── LuxReader.swift                # subprocess → IORegistry
 ```
 
 ---
 
 ## 관련 문서
 
-- [PRD.md](PRD.md) — 개발자용 명세
-- [BACKGROUND.md](BACKGROUND.md) — 제품 스토리
-- [research/adaptive-curves.md](research/adaptive-curves.md) — 곡선 학술 근거
+- [research/software-dimming-algorithms.md](research/software-dimming-algorithms.md) — 감마/CCT/멜라토닌 공식 전체
+- [research/adaptive-curves.md](research/adaptive-curves.md) — 밝기 곡선 학술 근거
+- [appstore/metadata.md](appstore/metadata.md) — App Store 메타데이터
+- [bgraw.md](bgraw.md) — 배경 원문 기록
+- [bgwiki.md](bgwiki.md) — 배경 정제본
