@@ -16,7 +16,7 @@ struct GnomonApp: App {
     @AppStorage("onboardingCompletedAt") private var onboardingCompletedAt: Double = 0
 
     var body: some Scene {
-        WindowGroup("Gnomon", id: "main") {
+        WindowGroup(Self.mainWindowTitle, id: "main") {
             Group {
                 if onboardingCompletedAt > 0 {
                     MainWindow(controller: controller)
@@ -87,6 +87,12 @@ struct GnomonApp: App {
                 wireHotkeys()
             }
         }
+    }
+
+    private static var mainWindowTitle: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        guard let version, !version.isEmpty else { return "Gnomon" }
+        return "Gnomon \(version)"
     }
 }
 

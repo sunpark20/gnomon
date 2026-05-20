@@ -1,7 +1,33 @@
 # 다음 세션 핸드오프
 
 > 작성: 2026-04-26 (세션 6 — Century Iris PoC + 리서치 + 하네스 설계)
+> 업데이트: 2026-05-20 (Gnomon 1.7.2 DDC sleep/wake hotfix)
 > 이 문서 하나만으로 새 세션이 컨텍스트 없이 이어받을 수 있게 작성됨.
+
+---
+
+## 2026-05-20 Hotfix Notes — Gnomon 1.7.2
+
+현재 checkout은 아직 Century Iris 전환 전의 DDC 기반 Gnomon이다. 이번 hotfix는 사용자가 MacBook을 잠자기에서 깨우고 외장 모니터가 다시 붙은 뒤, DDC write가 성공처럼 보이지만 실제 밝기가 바뀌지 않는 상태를 다룬다.
+
+- 메인 창 타이틀은 `Gnomon 1.7.2`처럼 `CFBundleShortVersionString`을 포함한다.
+- `AutoLoopController`는 brightness write 후 read-back으로 실제 적용 여부를 검증한다.
+- read-back mismatch 또는 DDC 실패 시 모니터를 재탐색하고 1회 재시도한다.
+- 재시도 후에도 실패하면 `activeMonitor = nil`로 내려 UI가 disconnected 상태를 표시하게 한다.
+- Auto/manual brightness 모두 `activeMonitor`가 없으면 write 전에 재탐색한다.
+- wake/display-change 복구 지연은 `0s, 3s, 8s, 20s, 60s`다.
+- `initialSyncTask`는 cancel 후 sleep이 풀렸을 때 추가 sync를 실행하지 않도록 `Task.isCancelled`를 확인한다.
+
+변경 파일:
+- `Gnomon/App/GnomonApp.swift`
+- `Gnomon/ViewModels/AutoLoopController.swift`
+- `GnomonTests/AutoLoopControllerTests.swift`
+
+검증:
+- `swiftformat --lint .` passed.
+- `swiftlint --strict --quiet` passed.
+- `xcodebuild -project Gnomon.xcodeproj -scheme Gnomon -configuration Debug -derivedDataPath /private/tmp/gnomon-derived-test PRODUCT_BUNDLE_IDENTIFIER=com.sunguk.gnomon.GnomonTestHost test` passed: 56 tests, 3 hardware integration tests skipped.
+- Plain `xcodebuild ... test` can fail while the released Gnomon is running because the app's single-instance guard sees the same bundle identifier. Use the temporary test bundle identifier above, or quit the running app first.
 
 ---
 
@@ -17,9 +43,10 @@ Step 파일 6개가 이미 작성되어 있다. 실행하면 Gnomon → Century 
 
 ## 프로젝트 현재 상태
 
-- 경로: `/Users/sunguk/0.code/gnomoniter` (Gnomon 카피본 → Century Iris로 전환 중)
+- 경로: `/Users/sunguk/0.code/0.shipping/gnomon` (Gnomon → Century Iris 전환 준비 중)
 - 브랜치: `main`
-- 최신 커밋: `eded073` (push 완료)
+- 최신 릴리즈: `v1.7.2`
+- 2026-05-20 기준 위 hotfix는 `v1.7.2`에 포함됨.
 - 빌드: Gnomon으로는 빌드 가능. Century Iris 전환은 아직 미시작.
 - **하네스 상태**: Step 파일 작성 완료, 실행 대기 (Phase C → D 전환점)
 

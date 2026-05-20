@@ -11,6 +11,17 @@ import AppKit
 import Foundation
 import Observation
 
+private enum AutoLoopWriteError: LocalizedError {
+    case brightnessVerificationFailed(expected: Int, actual: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case let .brightnessVerificationFailed(expected, actual):
+            "DDC brightness verification failed: expected \(expected), read back \(actual)"
+        }
+    }
+}
+
 // swiftlint:disable file_length
 @MainActor
 @Observable
@@ -67,7 +78,8 @@ public final class AutoLoopController {
     private var screenObserver: (any NSObjectProtocol)?
     private var initialSyncTask: Task<Void, Never>?
     private var displayRecoveryTask: Task<Void, Never>?
-    var displayRecoveryDelays: [Duration] = [.zero, .seconds(3), .seconds(5)]
+    var displayRecoveryDelays: [Duration] = [.zero, .seconds(3), .seconds(8), .seconds(20), .seconds(60)]
+    var brightnessVerificationDelay: Duration = .milliseconds(120)
     private let rediscoveryDebouncer = Debouncer(delay: .seconds(2))
 
     // MARK: - Init
@@ -128,6 +140,7 @@ public final class AutoLoopController {
 
         initialSyncTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
+            if Task.isCancelled { return }
             await self?.syncIfNeeded()
         }
     }
@@ -267,15 +280,53 @@ public final class AutoLoopController {
         return await syncCurrentTarget(force: true, reason: "\(reason)-recovery-\(attempt)")
     }
 
+    private func monitorForWrite(reason: String) async -> MonitorID? {
+        if let activeMonitor {
+            return activeMonitor
+        }
+        print("[\(reason)] no active DDC monitor, rediscovering…")
+        return await rediscoverMonitor()
+    }
+
+    private func markMonitorUnhealthy(reason: String) {
+        if let monitor = activeMonitor {
+            print("[ddc] marking monitor unhealthy (\(monitor.displayName)): \(reason)")
+        }
+        activeMonitor = nil
+        lastSentBrightness = nil
+    }
+
+    private func writeBrightnessAndVerify(_ target: Int, on monitor: MonitorID) async throws {
+        try await dependencies.setBrightness(target, monitor)
+        if brightnessVerificationDelay > .zero {
+            try await Task.sleep(for: brightnessVerificationDelay)
+        }
+        let actual = try await dependencies.getBrightness(monitor)
+        guard abs(actual - target) <= 1 else {
+            throw AutoLoopWriteError.brightnessVerificationFailed(expected: target, actual: actual)
+        }
+    }
+
     private func writeBrightnessWithRetry(_ target: Int, on monitor: MonitorID) async throws {
         do {
-            try await dependencies.setBrightness(target, monitor)
+            try await writeBrightnessAndVerify(target, on: monitor)
+        } catch let error as CancellationError {
+            throw error
         } catch {
-            print("[ddc-retry] first write failed, rediscovering…")
+            let firstError = error
+            print("[ddc-retry] first write/verify failed, rediscovering…")
             if let fresh = await rediscoverMonitor() {
-                try await dependencies.setBrightness(target, fresh)
+                do {
+                    try await writeBrightnessAndVerify(target, on: fresh)
+                } catch let error as CancellationError {
+                    throw error
+                } catch {
+                    markMonitorUnhealthy(reason: error.localizedDescription)
+                    throw error
+                }
             } else {
-                throw error
+                markMonitorUnhealthy(reason: firstError.localizedDescription)
+                throw firstError
             }
         }
     }
@@ -358,7 +409,8 @@ public final class AutoLoopController {
 
     @discardableResult
     private func syncCurrentTarget(force: Bool, reason: String) async -> Bool {
-        guard autoEnabled, !isPaused, let monitor = activeMonitor else { return false }
+        guard autoEnabled, !isPaused else { return false }
+        guard let monitor = await monitorForWrite(reason: reason) else { return false }
         let target = targetBrightness
         let last = lastSentBrightness ?? -9999
 
@@ -376,6 +428,8 @@ public final class AutoLoopController {
             print("[\(reason)] \(mode) lux=\(Int(currentLux)) ema=\(Int(emaLux)) target=\(target) sent=\(target)")
             await logEntry(sentBrightness: target, manualOverride: false)
             return true
+        } catch is CancellationError {
+            return false
         } catch {
             lastSentBrightness = nil
             print("[\(reason)] DDC error (after retry): \(error.localizedDescription)")
@@ -408,13 +462,21 @@ public final class AutoLoopController {
         manualOverrideAt = Date()
         lastSentBrightness = clamped
         targetBrightness = clamped
-        guard let monitor = activeMonitor else { return }
         manualWriteDebouncer.schedule { [weak self] in
+            guard let self else { return }
+            guard let monitor = await monitorForWrite(reason: "manual") else {
+                lastSentBrightness = nil
+                return
+            }
             do {
-                try await self?.writeBrightnessWithRetry(clamped, on: monitor)
-                self?.lastSyncAt = Date()
-                await self?.logEntry(sentBrightness: clamped, manualOverride: true)
+                try await writeBrightnessWithRetry(clamped, on: monitor)
+                lastSentBrightness = clamped
+                lastSyncAt = Date()
+                await logEntry(sentBrightness: clamped, manualOverride: true)
+            } catch is CancellationError {
+                return
             } catch {
+                lastSentBrightness = nil
                 print("[manual] DDC error: \(error.localizedDescription)")
             }
         }
@@ -473,12 +535,13 @@ public final class AutoLoopController {
     public func userSetContrast(_ value: Int) {
         let clamped = max(0, min(100, value))
         contrast = clamped
-        guard let monitor = activeMonitor else { return }
-        let dependencies = dependencies
-        contrastWriteDebouncer.schedule {
+        contrastWriteDebouncer.schedule { [weak self] in
+            guard let self else { return }
+            guard let monitor = await monitorForWrite(reason: "contrast") else { return }
             do {
                 try await dependencies.setContrast(clamped, monitor)
             } catch {
+                markMonitorUnhealthy(reason: error.localizedDescription)
                 print("[contrast] DDC error: \(error.localizedDescription)")
             }
         }

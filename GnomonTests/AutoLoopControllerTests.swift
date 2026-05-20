@@ -21,6 +21,7 @@ private actor AutoLoopFakeState {
     var writes: [Int] = []
     var listCalls = 0
     var failedWritesRemaining = 0
+    var ignoredWritesRemaining = 0
     var monitorBatches: [[MonitorID]] = []
     var logEntries: [CSVLogEntry] = []
 
@@ -50,8 +51,12 @@ private actor AutoLoopFakeState {
             failedWritesRemaining -= 1
             throw AutoLoopFakeError.writeFailed
         }
-        brightness = value
         writes.append(value)
+        if ignoredWritesRemaining > 0 {
+            ignoredWritesRemaining -= 1
+            return
+        }
+        brightness = value
     }
 
     func getContrast(on monitor: MonitorID) -> Int {
@@ -74,6 +79,10 @@ private actor AutoLoopFakeState {
         failedWritesRemaining = count
     }
 
+    func setIgnoredWritesRemaining(_ count: Int) {
+        ignoredWritesRemaining = count
+    }
+
     func setMonitorBatches(_ batches: [[MonitorID]]) {
         monitorBatches = batches
     }
@@ -84,7 +93,7 @@ final class AutoLoopControllerTests: XCTestCase {
     private func makeController(
         state: AutoLoopFakeState = AutoLoopFakeState()
     ) -> AutoLoopController {
-        AutoLoopController(dependencies: AutoLoopDependencies(
+        let controller = AutoLoopController(dependencies: AutoLoopDependencies(
             currentLux: {
                 await state.currentLux()
             },
@@ -110,6 +119,8 @@ final class AutoLoopControllerTests: XCTestCase {
                 await state.appendLog(entry)
             }
         ))
+        controller.brightnessVerificationDelay = .zero
+        return controller
     }
 
     func testUserSetBrightnessDisablesAuto() {
@@ -195,7 +206,7 @@ final class AutoLoopControllerTests: XCTestCase {
         await controller.start()
         controller.stop()
         await state.clearWrites()
-        await state.setFailedWritesRemaining(1)
+        await state.setFailedWritesRemaining(2)
 
         controller.applyNow()
         try await Task.sleep(for: .milliseconds(100))
@@ -208,6 +219,43 @@ final class AutoLoopControllerTests: XCTestCase {
         let writes = await state.writes
         XCTAssertEqual(writes, [50])
         XCTAssertEqual(controller.lastSentBrightness, 50)
+    }
+
+    func testSilentWriteNoOpRetriesAfterReadBackMismatch() async throws {
+        let state = AutoLoopFakeState(brightness: 85)
+        let controller = makeController(state: state)
+        await controller.start()
+        controller.stop()
+        await state.clearWrites()
+        await state.setIgnoredWritesRemaining(1)
+
+        controller.applyNow()
+        try await Task.sleep(for: .milliseconds(100))
+
+        let writes = await state.writes
+        let brightness = await state.brightness
+        XCTAssertEqual(writes, [50, 50])
+        XCTAssertEqual(brightness, 50)
+        XCTAssertEqual(controller.lastSentBrightness, 50)
+        XCTAssertNotNil(controller.activeMonitor)
+    }
+
+    func testRepeatedSilentWriteNoOpMarksMonitorDisconnected() async throws {
+        let state = AutoLoopFakeState(brightness: 85)
+        let controller = makeController(state: state)
+        await controller.start()
+        controller.stop()
+        await state.clearWrites()
+        await state.setIgnoredWritesRemaining(2)
+
+        controller.applyNow()
+        try await Task.sleep(for: .milliseconds(100))
+
+        let writes = await state.writes
+        XCTAssertEqual(writes, [50, 50])
+        XCTAssertNil(controller.lastSentBrightness)
+        XCTAssertNil(controller.activeMonitor)
+        XCTAssertFalse(controller.monitorConnected)
     }
 
     func testDisplayRecoveryRetriesUntilMonitorIsAvailable() async throws {
