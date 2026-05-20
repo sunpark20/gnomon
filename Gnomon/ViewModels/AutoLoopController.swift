@@ -11,6 +11,7 @@ import AppKit
 import Foundation
 import Observation
 
+// swiftlint:disable file_length
 @MainActor
 @Observable
 // swiftlint:disable:next type_body_length
@@ -43,9 +44,7 @@ public final class AutoLoopController {
 
     // MARK: - Dependencies
 
-    private let luxReader: LuxReader
-    private let ddcClient: M1DDCClient
-    private let logger: CSVLogger
+    private let dependencies: AutoLoopDependencies
 
     // MARK: - Private state
 
@@ -60,11 +59,15 @@ public final class AutoLoopController {
     private let contrastWriteDebouncer = Debouncer(delay: .milliseconds(200))
     public private(set) var manualOverrideAt: Date?
     public var contrast = 70 // PRD §5.2.2 fixed default (LG factory)
-    public var monitorConnected: Bool { activeMonitor != nil }
+    public var monitorConnected: Bool {
+        activeMonitor != nil
+    }
 
     private var wakeObserver: (any NSObjectProtocol)?
     private var screenObserver: (any NSObjectProtocol)?
     private var initialSyncTask: Task<Void, Never>?
+    private var displayRecoveryTask: Task<Void, Never>?
+    var displayRecoveryDelays: [Duration] = [.zero, .seconds(3), .seconds(5)]
     private let rediscoveryDebouncer = Debouncer(delay: .seconds(2))
 
     // MARK: - Init
@@ -74,9 +77,11 @@ public final class AutoLoopController {
         ddcClient: M1DDCClient = M1DDCClient(),
         logger: CSVLogger = CSVLogger()
     ) {
-        self.luxReader = luxReader
-        self.ddcClient = ddcClient
-        self.logger = logger
+        dependencies = .live(luxReader: luxReader, ddcClient: ddcClient, logger: logger)
+    }
+
+    init(dependencies: AutoLoopDependencies) {
+        self.dependencies = dependencies
     }
 
     // MARK: - Lifecycle
@@ -89,14 +94,14 @@ public final class AutoLoopController {
 
         var monitors: [MonitorID] = []
         do {
-            monitors = try await ddcClient.listDisplays()
+            monitors = try await dependencies.listDisplays()
             activeMonitor = pickMonitor(from: monitors)
             if let monitor = activeMonitor {
-                lastSentBrightness = try? await ddcClient.getBrightness(on: monitor)
+                lastSentBrightness = try? await dependencies.getBrightness(monitor)
                 // m1ddc occasionally returns 0 when the read transiently fails;
                 // 0 is also a nonsensical usable contrast. Treat it as "no reading"
                 // and keep the factory default (70) rather than stamping 0 over it.
-                if let existingContrast = try? await ddcClient.getContrast(on: monitor),
+                if let existingContrast = try? await dependencies.getContrast(monitor),
                    existingContrast > 0
                 {
                     contrast = existingContrast
@@ -108,12 +113,12 @@ public final class AutoLoopController {
 
         let displayNames = monitors.map { "\($0.displayName) [\($0.uuid)]" }
         let info = SystemInfo.collect(activeDisplays: displayNames)
-        Task.detached { [logger] in
+        Task.detached { [dependencies] in
             // ensureFile first: upgrades the header if the schema changed and
             // backs up the old file, so rotate operates on the current schema.
-            try? await logger.ensureFile()
-            try? await logger.rotate()
-            try? await logger.writeDiagnostics(info)
+            try? await dependencies.ensureLogFile()
+            try? await dependencies.rotateLog()
+            try? await dependencies.writeDiagnostics(info)
         }
 
         nextSyncAt = Date().addingTimeInterval(syncInterval)
@@ -124,7 +129,6 @@ public final class AutoLoopController {
         initialSyncTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
             await self?.syncIfNeeded()
-            self?.updateNextSyncAt()
         }
     }
 
@@ -132,10 +136,12 @@ public final class AutoLoopController {
         sampleTask?.cancel()
         syncTask?.cancel()
         initialSyncTask?.cancel()
+        displayRecoveryTask?.cancel()
         rediscoveryDebouncer.cancel()
         sampleTask = nil
         syncTask = nil
         initialSyncTask = nil
+        displayRecoveryTask = nil
         removeDisplayObservers()
     }
 
@@ -183,7 +189,7 @@ public final class AutoLoopController {
             Task { @MainActor in
                 guard let self else { return }
                 self.rediscoveryDebouncer.schedule { [weak self] in
-                    await self?.rediscoverMonitor()
+                    self?.startDisplayRecovery(reason: "wake")
                 }
             }
         }
@@ -193,7 +199,7 @@ public final class AutoLoopController {
             Task { @MainActor in
                 guard let self else { return }
                 self.rediscoveryDebouncer.schedule { [weak self] in
-                    await self?.rediscoverMonitor()
+                    self?.startDisplayRecovery(reason: "screen-change")
                 }
             }
         }
@@ -214,29 +220,60 @@ public final class AutoLoopController {
     private func rediscoverMonitor() async -> MonitorID? {
         let old = activeMonitor
         do {
-            let monitors = try await ddcClient.listDisplays()
+            let monitors = try await dependencies.listDisplays()
             activeMonitor = pickMonitor(from: monitors)
         } catch {
             print("[rediscovery] listDisplays failed: \(error.localizedDescription)")
             activeMonitor = nil
         }
         if activeMonitor?.uuid != old?.uuid {
-            print("[rediscovery] monitor changed: \(old?.displayName ?? "nil") → \(activeMonitor?.displayName ?? "nil")")
-            if activeMonitor != nil {
-                await syncIfNeeded()
-                updateNextSyncAt()
-            }
+            print(
+                "[rediscovery] monitor changed: \(old?.displayName ?? "nil")"
+                    + " → \(activeMonitor?.displayName ?? "nil")"
+            )
         }
         return activeMonitor
     }
 
+    func startDisplayRecovery(reason: String) {
+        displayRecoveryTask?.cancel()
+        displayRecoveryTask = Task { [weak self] in
+            guard let self else { return }
+            for (index, delay) in displayRecoveryDelays.enumerated() {
+                if delay > .zero {
+                    try? await Task.sleep(for: delay)
+                }
+                if Task.isCancelled { return }
+                let recovered = await recoverDisplayOnce(
+                    reason: reason,
+                    attempt: index + 1
+                )
+                if recovered { return }
+            }
+        }
+    }
+
+    @discardableResult
+    private func recoverDisplayOnce(reason: String, attempt: Int) async -> Bool {
+        guard await rediscoverMonitor() != nil else {
+            print("[display-recovery] \(reason) attempt \(attempt): no DDC monitor")
+            return false
+        }
+        await refreshLuxForSync(reason: reason)
+        guard autoEnabled, !isPaused else {
+            print("[display-recovery] \(reason) attempt \(attempt): auto disabled or paused")
+            return true
+        }
+        return await syncCurrentTarget(force: true, reason: "\(reason)-recovery-\(attempt)")
+    }
+
     private func writeBrightnessWithRetry(_ target: Int, on monitor: MonitorID) async throws {
         do {
-            try await ddcClient.setBrightness(target, on: monitor)
+            try await dependencies.setBrightness(target, monitor)
         } catch {
             print("[ddc-retry] first write failed, rediscovering…")
             if let fresh = await rediscoverMonitor() {
-                try await ddcClient.setBrightness(target, on: fresh)
+                try await dependencies.setBrightness(target, fresh)
             } else {
                 throw error
             }
@@ -250,25 +287,21 @@ public final class AutoLoopController {
         sampleTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.sampleOnce()
-                try? await Task.sleep(for: .seconds(1))
+                guard let interval = self?.sampleInterval else { return }
+                try? await Task.sleep(for: .seconds(interval))
             }
         }
     }
 
     private func sampleOnce() async {
         do {
-            let raw = try await luxReader.currentLux()
-            currentLux = raw
-            emaLux = ema.update(raw)
-            if autoEnabled, !isPaused {
-                targetBrightness = BrightnessCurve.target(lux: emaLux, parameters: parameters)
+            try await updateLuxFromSensor()
+            if ema.didSnapOnLastUpdate {
                 // A snap means a sustained genuine scene change (covered sensor,
                 // lights off). Bypass the interval cadence and push immediately
                 // so the user sees a quick response even at long sync intervals.
                 // Modest EMA-tracked drift still waits for the normal sync tick.
-                if ema.didSnapOnLastUpdate {
-                    await snapSyncImmediately()
-                }
+                await snapSyncImmediately()
             }
         } catch {
             // Swallow transient read errors — UI keeps last good value.
@@ -276,22 +309,28 @@ public final class AutoLoopController {
         }
     }
 
-    private func snapSyncImmediately() async {
-        guard let monitor = activeMonitor else { return }
-        let target = targetBrightness
-        let last = lastSentBrightness ?? -9999
-        guard abs(target - last) >= deadband else { return }
+    private func updateLuxFromSensor() async throws {
+        let raw = try await dependencies.currentLux()
+        currentLux = raw
+        emaLux = ema.update(raw)
+        if autoEnabled, !isPaused {
+            targetBrightness = BrightnessCurve.target(lux: emaLux, parameters: parameters)
+        }
+    }
+
+    private func refreshLuxForSync(reason: String) async {
         do {
-            try await writeBrightnessWithRetry(target, on: monitor)
-            lastSentBrightness = target
-            lastSyncAt = Date()
-            print("[snap-sync] ema=\(Int(emaLux)) target=\(target) (bypassed interval)")
-            await logEntry(sentBrightness: target, manualOverride: false)
-            syncTask?.cancel()
-            updateNextSyncAt()
-            scheduleSyncing()
+            try await updateLuxFromSensor()
         } catch {
-            print("[snap-sync] DDC error: \(error.localizedDescription)")
+            print("[display-recovery] \(reason): lux refresh failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func snapSyncImmediately() async {
+        let didSync = await syncCurrentTarget(force: false, reason: "snap-sync")
+        if didSync {
+            syncTask?.cancel()
+            scheduleSyncing()
         }
     }
 
@@ -314,23 +353,33 @@ public final class AutoLoopController {
     }
 
     private func syncIfNeeded() async {
-        guard autoEnabled, !isPaused, let monitor = activeMonitor else { return }
+        _ = await syncCurrentTarget(force: false, reason: "sync")
+    }
+
+    @discardableResult
+    private func syncCurrentTarget(force: Bool, reason: String) async -> Bool {
+        guard autoEnabled, !isPaused, let monitor = activeMonitor else { return false }
         let target = targetBrightness
         let last = lastSentBrightness ?? -9999
 
-        guard abs(target - last) >= deadband else {
+        guard force || abs(target - last) >= deadband else {
             print("[sync] skip (delta < deadband): target=\(target) last=\(last)")
-            return
+            return true
         }
 
         do {
             try await writeBrightnessWithRetry(target, on: monitor)
             lastSentBrightness = target
             lastSyncAt = Date()
-            print("[sync] lux=\(Int(currentLux)) ema=\(Int(emaLux)) target=\(target) sent=\(target)")
+            updateNextSyncAt()
+            let mode = force ? "forced" : "normal"
+            print("[\(reason)] \(mode) lux=\(Int(currentLux)) ema=\(Int(emaLux)) target=\(target) sent=\(target)")
             await logEntry(sentBrightness: target, manualOverride: false)
+            return true
         } catch {
-            print("[sync] DDC error (after retry): \(error.localizedDescription)")
+            lastSentBrightness = nil
+            print("[\(reason)] DDC error (after retry): \(error.localizedDescription)")
+            return false
         }
     }
 
@@ -346,7 +395,7 @@ public final class AutoLoopController {
             bMin: parameters.minBrightness,
             bMax: parameters.maxBrightness
         )
-        try? await logger.append(entry)
+        try? await dependencies.appendLog(entry)
     }
 
     // MARK: - User interactions (Phase 4)
@@ -376,26 +425,32 @@ public final class AutoLoopController {
     public func resumeAuto() {
         autoEnabled = true
         manualOverrideAt = nil
+        lastSentBrightness = nil
+        forceSyncAfterAutoEnabled()
     }
 
     /// Toggles Auto on/off.
     public func toggleAuto() {
         autoEnabled.toggle()
-        if autoEnabled { manualOverrideAt = nil }
+        if autoEnabled {
+            manualOverrideAt = nil
+            lastSentBrightness = nil
+            forceSyncAfterAutoEnabled()
+        }
+    }
+
+    private func forceSyncAfterAutoEnabled() {
+        Task { [weak self] in
+            guard let self else { return }
+            await refreshLuxForSync(reason: "auto-on")
+            await syncCurrentTarget(force: true, reason: "auto-on")
+        }
     }
 
     /// Writes the current computed target immediately, ignoring the deadband.
     public func applyNow() {
-        guard let monitor = activeMonitor else { return }
-        let target = targetBrightness
         Task { [weak self] in
-            do {
-                try await self?.writeBrightnessWithRetry(target, on: monitor)
-                self?.lastSentBrightness = target
-                self?.lastSyncAt = Date()
-            } catch {
-                print("[applyNow] DDC error: \(error.localizedDescription)")
-            }
+            await self?.syncCurrentTarget(force: true, reason: "apply-now")
         }
     }
 
@@ -419,10 +474,10 @@ public final class AutoLoopController {
         let clamped = max(0, min(100, value))
         contrast = clamped
         guard let monitor = activeMonitor else { return }
-        let client = ddcClient
+        let dependencies = dependencies
         contrastWriteDebouncer.schedule {
             do {
-                try await client.setContrast(clamped, on: monitor)
+                try await dependencies.setContrast(clamped, monitor)
             } catch {
                 print("[contrast] DDC error: \(error.localizedDescription)")
             }

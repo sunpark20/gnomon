@@ -1,6 +1,6 @@
 import AppKit
-import IOKit
 import CoreGraphics
+import IOKit
 
 // MARK: - Ambient Light Sensor (IORegistry)
 
@@ -58,8 +58,14 @@ final class GammaController {
     private var captured = false
 
     func capture(displayID: CGDirectDisplayID) {
-        CGGetDisplayTransferByTable(displayID, 256,
-            &origRed, &origGreen, &origBlue, &sampleCount)
+        CGGetDisplayTransferByTable(
+            displayID,
+            256,
+            &origRed,
+            &origGreen,
+            &origBlue,
+            &sampleCount
+        )
         captured = true
     }
 
@@ -91,7 +97,7 @@ func listDisplays() -> [DisplayInfo] {
     var ids = [CGDirectDisplayID](repeating: 0, count: 16)
     var count: UInt32 = 0
     CGGetActiveDisplayList(16, &ids, &count)
-    return (0..<Int(count)).map { i in
+    return (0 ..< Int(count)).map { i in
         let id = ids[i]
         let builtIn = CGDisplayIsBuiltin(id) != 0
         let bounds = CGDisplayBounds(id)
@@ -121,8 +127,10 @@ func testCorebrightnessdiag() -> String {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         if proc.terminationStatus == 0 {
             let output = String(data: data, encoding: .utf8) ?? ""
-            if let range = output.range(of: "AggregatedLux\\s*=\\s*([\\d.]+)",
-                                        options: .regularExpression) {
+            if let range = output.range(
+                of: "AggregatedLux\\s*=\\s*([\\d.]+)",
+                options: .regularExpression
+            ) {
                 return "OK: \(output[range])"
             }
             return "OK but AggregatedLux not found"
@@ -198,14 +206,14 @@ final class PoCDelegate: NSObject, NSApplicationDelegate {
     func poll() {
         readCount += 1
         switch readAmbientLux() {
-        case .success(let lux, let raw):
+        case let .success(lux, raw):
             successCount += 1
             luxValueLabel.stringValue = String(format: "%.1f lux", lux)
             luxValueLabel.textColor = .labelColor
             rawValueLabel.stringValue = "raw: \(raw)  (/ 65536 = \(String(format: "%.3f", Double(raw) / 65536.0)))"
             statusLabel.stringValue = "\(successCount)/\(readCount) reads OK"
             statusLabel.textColor = .systemGreen
-        case .failure(let msg):
+        case let .failure(msg):
             luxValueLabel.stringValue = "— lux"
             luxValueLabel.textColor = .systemRed
             rawValueLabel.stringValue = msg
@@ -246,8 +254,10 @@ final class PoCDelegate: NSObject, NSApplicationDelegate {
         let line = "[\(ts)] \(msg)\n"
         logView?.textStorage?.append(NSAttributedString(
             string: line,
-            attributes: [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
-                         .foregroundColor: NSColor.secondaryLabelColor]
+            attributes: [
+                .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
+                .foregroundColor: NSColor.secondaryLabelColor,
+            ]
         ))
         logView?.scrollToEndOfDocument(nil)
     }
@@ -259,7 +269,8 @@ final class PoCDelegate: NSObject, NSApplicationDelegate {
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: w, height: h),
             styleMask: [.titled, .closable, .miniaturizable],
-            backing: .buffered, defer: false)
+            backing: .buffered, defer: false
+        )
         window.title = "Gnomon PoC — Sensor + Gamma"
         window.center()
 
@@ -295,7 +306,9 @@ final class PoCDelegate: NSObject, NSApplicationDelegate {
         let dispLabel = smallLabel("Display:", x: 20, y: y + 2)
         content.addSubview(dispLabel)
         displayPopup = NSPopUpButton(frame: NSRect(x: 80, y: y, width: 300, height: 24), pullsDown: false)
-        for d in displays { displayPopup.addItem(withTitle: "\(d.name) [ID \(d.id)]") }
+        for d in displays {
+            displayPopup.addItem(withTitle: "\(d.name) [ID \(d.id)]")
+        }
         displayPopup.target = self
         displayPopup.action = #selector(displayChanged(_:))
         content.addSubview(displayPopup)
