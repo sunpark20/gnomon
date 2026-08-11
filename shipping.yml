@@ -7,11 +7,11 @@ app:
   platforms: [macos]
   bundle_ids: [com.sunguk.gnomon.Gnomon]
   min_os: "macOS 15.0+, Apple Silicon"
-  version: "1.7.2"
+  version: "1.8.0"
   status: released
-  updated_at: "2026.05"
+  updated_at: "2026.08"
 release:
-  macos: "https://github.com/sunpark20/gnomon/releases/tag/v1.7.2"
+  macos: "https://github.com/sunpark20/gnomon/releases/tag/v1.8.0"
 web:
   privacy: null
   support: null
