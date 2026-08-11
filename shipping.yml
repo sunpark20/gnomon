@@ -13,8 +13,8 @@ app:
 release:
   macos: "https://github.com/sunpark20/gnomon/releases/tag/v1.8.0"
 web:
-  privacy: null
-  support: null
+  privacy: "https://homeninja.vercel.app/privacy/gnomon"
+  support: "https://homeninja.vercel.app/support/gnomon"
 reporting:
   template: gnomon-bug.yml
   locales: [en]
