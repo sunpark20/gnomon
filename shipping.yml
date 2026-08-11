@@ -1,0 +1,20 @@
+schema_version: 2
+app:
+  id: gnomon
+  display_name: Gnomon
+  display_name_ko: Gnomon
+  tagline_ko: "MacBook 조도센서로 외장 모니터 밝기를 자동으로 맞춰줍니다"
+  platforms: [macos]
+  bundle_ids: [com.sunguk.gnomon.Gnomon]
+  min_os: "macOS 15.0+, Apple Silicon"
+  version: "1.7.2"
+  status: released
+  updated_at: "2026.05"
+release:
+  macos: "https://github.com/sunpark20/gnomon/releases/tag/v1.7.2"
+web:
+  privacy: null
+  support: null
+reporting:
+  template: gnomon-bug.yml
+  locales: [en]
