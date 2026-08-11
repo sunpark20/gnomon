@@ -6,11 +6,12 @@
 //    • Hotkeys — double-click any row to rebind.
 //    • Brightness Range — Min/Max numeric fields, Reset.
 //    • Sync Options — free-text interval (seconds), active monitor.
-//    • Bug Report — opens a prefilled email to the developer.
+//    • Bug Report — opens the public GitHub form.
 //    • About — version + description.
 //
 
 import AppKit
+import ReportKit
 import SwiftUI
 
 // Settings container aggregates multiple independent sections in one view, so the
@@ -30,13 +31,18 @@ struct SettingsWindow: View {
     @State private var minText = "0"
     @State private var maxText = "100"
     @State private var darkFloorText = "15"
-    @State private var emailCopied = false
+    @State private var reportStatus: String?
     @FocusState private var intervalFocused: Bool
     @FocusState private var minFocused: Bool
     @FocusState private var maxFocused: Bool
     @FocusState private var darkFloorFocused: Bool
 
-    private let bugReportEmail = "coastguard2681@gmail.com"
+    private static let reportTarget = ReportTarget(
+        appID: "gnomon",
+        displayName: "Gnomon",
+        template: "gnomon-bug.yml"
+    )
+
     // swiftlint:disable:next line_length
     private static let calibrationTip = "The ambient lux level where Min % brightness is correct. Open a white window, then hold white paper next to it. If the screen is brighter than the paper, raise this value until they match."
 
@@ -47,6 +53,7 @@ struct SettingsWindow: View {
                 brightnessRangeSection
                 syncSection
                 bugReportSection
+                aboutSection
             }
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -331,6 +338,19 @@ struct SettingsWindow: View {
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
         }, content: {
+            Text("GitHub reports are public. Do not include personal information or raw logs.")
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+            HStack(spacing: 8) {
+                Button(action: openGitHubReport) {
+                    Label("Report on GitHub", systemImage: "ladybug")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            Text("Reports open in your browser and may require a GitHub account.")
+                .font(.caption2)
+                .foregroundStyle(Theme.textSecondary)
             HStack(spacing: 6) {
                 Button(action: { openLogsFolder() }, label: {
                     HStack(spacing: 4) {
@@ -341,20 +361,7 @@ struct SettingsWindow: View {
                     .foregroundStyle(Theme.gold)
                 })
                 .buttonStyle(.plain)
-                Spacer()
-            }
-            HStack(spacing: 6) {
-                Button(action: copyBugReportEmail) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "envelope")
-                        Text(bugReportEmail)
-                        Image(systemName: emailCopied ? "checkmark" : "doc.on.doc")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(Theme.gold)
-                }
-                .buttonStyle(.plain)
-                .help(emailCopied ? "Copied!" : "Click to copy")
+                .help("Review and redact logs before sharing them")
                 Spacer()
                 Button(action: {
                     if let url = URL(string: "https://homeninja.vercel.app/#gnomon") {
@@ -368,14 +375,23 @@ struct SettingsWindow: View {
                 .buttonStyle(.plain)
                 .help("Homepage")
             }
+            if let reportStatus {
+                Text(reportStatus)
+                    .font(.caption2)
+                    .foregroundStyle(Theme.gold)
+            }
         })
     }
 
     private var aboutSection: some View {
         SettingsSection(title: "About", iconName: "info.circle") {
             let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
-            Text("Gnomon · v\(version)")
+            let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+            Text("Gnomon · v\(version) (\(build))")
                 .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+            Text("Bug reports use one shared public GitHub tracker.")
+                .font(.caption2)
                 .foregroundStyle(Theme.textSecondary)
         }
     }
@@ -451,14 +467,23 @@ struct SettingsWindow: View {
         NSWorkspace.shared.open(url)
     }
 
-    private func copyBugReportEmail() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(bugReportEmail, forType: .string)
-        emailCopied = true
+    private func openGitHubReport() {
+        guard let link = Self.reportTarget.github(metadata: .current()) else {
+            reportStatus = "Could not create the report link."
+            return
+        }
+        showReportStatus(for: ReportOpener.open(link))
+    }
+
+    private func showReportStatus(for status: ReportOpener.Status) {
+        guard let message = status.userMessage else {
+            reportStatus = nil
+            return
+        }
+        reportStatus = message
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(1500))
-            emailCopied = false
+            try? await Task.sleep(for: .seconds(4))
+            reportStatus = nil
         }
     }
 }
