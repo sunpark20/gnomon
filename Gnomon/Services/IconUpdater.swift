@@ -16,9 +16,9 @@ public final class IconUpdater {
     private var minuteTimer: Timer?
     private var autoEnabledObserver: NSObjectProtocol?
     private var wakeObserver: NSObjectProtocol?
-    public var currentAutoEnabled = true
+    private var currentAutoEnabled = true
 
-    public weak var statusItem: NSStatusItem?
+    private weak var statusItem: NSStatusItem?
 
     /// Calendar pinned to Asia/Seoul per user request. Localize properly if the
     /// app ever ships outside Korea — see TODO in PRD.
@@ -28,7 +28,11 @@ public final class IconUpdater {
         return cal
     }()
 
-    public func start() {
+    /// Attaches to the status item and begins driving its icon. Folds the old
+    /// two-step `statusItem = …; start()` into one call so the seam can't be
+    /// started without a target.
+    public func start(in statusItem: NSStatusItem) {
+        self.statusItem = statusItem
         refreshNow()
         scheduleMinuteTicks()
         autoEnabledObserver = NotificationCenter.default.addObserver(
@@ -67,7 +71,7 @@ public final class IconUpdater {
         }
     }
 
-    public func refreshNow() {
+    private func refreshNow() {
         let components = calendar.dateComponents([.hour, .minute], from: Date())
         let hour = components.hour ?? 0
         let minute = components.minute ?? 0

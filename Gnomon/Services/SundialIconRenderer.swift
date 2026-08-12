@@ -3,8 +3,8 @@
 //  Gnomon
 //
 //  Programmatically renders a sundial NSImage whose shadow rotates with the
-//  hour of day. Used both for the Dock (NSApp.applicationIconImage) and the
-//  menu bar (NSStatusItem.button.image).
+//  hour of day. Internal rendering seam for IconUpdater — produces the menu-bar
+//  icon (NSStatusItem.button.image). The shadow-angle math is the test surface.
 //
 //  The sundial is stylized — not astronomically accurate. The rotation
 //  follows a 24-hour clock convention so it matches user intuition:
@@ -18,25 +18,16 @@
 import AppKit
 import CoreGraphics
 
-public enum SundialIconRenderer {
-    public struct Style: Sendable {
-        public let diameter: CGFloat
-        public let faceColor: NSColor
-        public let rimColor: NSColor
-        public let tickColor: NSColor
-        public let gnomonColor: NSColor
-        public let shadowColor: NSColor
+enum SundialIconRenderer {
+    struct Style {
+        let diameter: CGFloat
+        let faceColor: NSColor
+        let rimColor: NSColor
+        let tickColor: NSColor
+        let gnomonColor: NSColor
+        let shadowColor: NSColor
 
-        public static let dock = Style(
-            diameter: 512,
-            faceColor: NSColor(red: 0.96, green: 0.94, blue: 0.88, alpha: 1),
-            rimColor: NSColor(red: 0.61, green: 0.50, blue: 0.26, alpha: 1),
-            tickColor: NSColor(red: 0.47, green: 0.38, blue: 0.18, alpha: 1),
-            gnomonColor: NSColor(red: 0.47, green: 0.38, blue: 0.18, alpha: 1),
-            shadowColor: NSColor(red: 0.30, green: 0.20, blue: 0.08, alpha: 0.85)
-        )
-
-        public static let menuBarActive = Style(
+        static let menuBarActive = Style(
             diameter: 32,
             faceColor: NSColor.clear,
             rimColor: NSColor(red: 0.96, green: 0.60, blue: 0.10, alpha: 1),
@@ -45,7 +36,7 @@ public enum SundialIconRenderer {
             shadowColor: NSColor(red: 0.96, green: 0.60, blue: 0.10, alpha: 1)
         )
 
-        public static let menuBarInactive = Style(
+        static let menuBarInactive = Style(
             diameter: 32,
             faceColor: NSColor.clear,
             rimColor: NSColor.secondaryLabelColor,
@@ -57,12 +48,12 @@ public enum SundialIconRenderer {
 
     /// Converts time-of-day into shadow rotation in degrees, measured clockwise from straight up.
     /// 00:00 = 0°, 06:00 = 90° (right), 12:00 = 180° (down), 18:00 = 270° (left).
-    public static func shadowAngle(hour: Int, minute: Int = 0) -> CGFloat {
+    static func shadowAngle(hour: Int, minute: Int = 0) -> CGFloat {
         let fractional = (Double(hour) + Double(minute) / 60.0).truncatingRemainder(dividingBy: 24)
         return CGFloat(fractional * 15)
     }
 
-    public static func image(hour: Int, minute: Int = 0, style: Style) -> NSImage {
+    static func image(hour: Int, minute: Int = 0, style: Style) -> NSImage {
         let size = NSSize(width: style.diameter, height: style.diameter)
         let image = NSImage(size: size, flipped: false) { rect in
             draw(in: rect, hour: hour, minute: minute, style: style)

@@ -35,8 +35,7 @@ public final class GnomonAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let updater = IconUpdater()
-        updater.statusItem = controller.rawItem
-        updater.start()
+        updater.start(in: controller.rawItem)
         iconUpdater = updater
 
         toggleWindowObserver = NotificationCenter.default.addObserver(

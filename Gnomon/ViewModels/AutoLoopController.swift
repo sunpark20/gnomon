@@ -409,13 +409,21 @@ public final class AutoLoopController {
 
     @discardableResult
     private func syncCurrentTarget(force: Bool, reason: String) async -> Bool {
-        guard autoEnabled, !isPaused else { return false }
+        let decision = SyncDecision.evaluate(SyncDecision.Input(
+            autoEnabled: autoEnabled,
+            isPaused: isPaused,
+            force: force,
+            target: targetBrightness,
+            lastSent: lastSentBrightness,
+            deadband: deadband
+        ))
+        guard decision != .disabled else { return false }
+        // Acquire the monitor only after the gate passes — preserves the original
+        // ordering (a deadband skip below still requires a live monitor).
         guard let monitor = await monitorForWrite(reason: reason) else { return false }
-        let target = targetBrightness
-        let last = lastSentBrightness ?? -9999
 
-        guard force || abs(target - last) >= deadband else {
-            print("[sync] skip (delta < deadband): target=\(target) last=\(last)")
+        guard case let .write(target) = decision else {
+            print("[sync] skip (delta < deadband): target=\(targetBrightness) last=\(lastSentBrightness ?? -1)")
             return true
         }
 
