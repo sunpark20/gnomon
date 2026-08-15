@@ -53,6 +53,7 @@ struct SettingsWindow: View {
                 brightnessRangeSection
                 syncSection
                 bugReportSection
+                UpdatesSection()
                 aboutSection
             }
             .padding(28)
@@ -492,7 +493,7 @@ struct SettingsWindow: View {
 
 // MARK: - Container
 
-private struct SettingsSection<Trailing: View, Content: View>: View {
+struct SettingsSection<Trailing: View, Content: View>: View {
     let title: String
     let iconName: String
     let trailing: Trailing

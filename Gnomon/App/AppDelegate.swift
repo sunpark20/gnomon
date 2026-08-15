@@ -38,6 +38,11 @@ public final class GnomonAppDelegate: NSObject, NSApplicationDelegate {
         updater.start(in: controller.rawItem)
         iconUpdater = updater
 
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            await UpdateChecker.shared.checkOnLaunch()
+        }
+
         toggleWindowObserver = NotificationCenter.default.addObserver(
             forName: .gnomonToggleWindow,
             object: nil,
