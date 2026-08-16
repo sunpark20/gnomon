@@ -28,17 +28,4 @@ public enum LuxCategory: CaseIterable, Sendable {
         default: .directSunlight
         }
     }
-
-    /// Normalized position 0.0 (dark) → 1.0 (bright) for progress bar rendering.
-    public var displayName: String {
-        switch self {
-        case .pitchDark: "Pitch Dark"
-        case .veryDim: "Very Dim"
-        case .dimIndoor: "Dim Indoor"
-        case .office: "Office"
-        case .bright: "Bright"
-        case .softDaylight: "Soft Daylight"
-        case .directSunlight: "Direct Sunlight"
-        }
-    }
 }

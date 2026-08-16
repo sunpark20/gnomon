@@ -12,7 +12,6 @@ import SwiftUI
 
 struct AmbientSensorCard: View {
     let lux: Double
-    let category: LuxCategory
     let message: DisplayMessage
     var monitorConnected = true
 
@@ -218,7 +217,6 @@ private struct QRCodeImage: View {
 #Preview("Night") {
     AmbientSensorCard(
         lux: 17,
-        category: .veryDim,
         message: .witty("Night-raid-ready illumination. Grab your gear.")
     )
     .padding()
@@ -228,7 +226,6 @@ private struct QRCodeImage: View {
 #Preview("Disconnected") {
     AmbientSensorCard(
         lux: 26,
-        category: .dimIndoor,
         message: .witty("The Goldshire Inn glows softer than this. Cozy."),
         monitorConnected: false
     )

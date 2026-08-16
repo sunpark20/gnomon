@@ -237,11 +237,6 @@ public final class HotkeyManager {
         HotkeyBindingStore.save(bindings)
     }
 
-    public func resetToDefaults() {
-        HotkeyBindingStore.reset()
-        bindings = KeyBinding.defaults
-    }
-
     func handleCarbonHotkey(id: UInt32) {
         let index = Int(id)
         let cases = HotkeyAction.allCases

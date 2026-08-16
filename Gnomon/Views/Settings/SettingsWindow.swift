@@ -43,9 +43,6 @@ struct SettingsWindow: View {
         template: "gnomon-bug.yml"
     )
 
-    // swiftlint:disable:next line_length
-    private static let calibrationTip = "The ambient lux level where Min % brightness is correct. Open a white window, then hold white paper next to it. If the screen is brighter than the paper, raise this value until they match."
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -129,18 +126,6 @@ struct SettingsWindow: View {
     }
 
     // MARK: - Sections
-
-    private var header: some View {
-        VStack(alignment: .leading) {
-            Text("Gnomon")
-                .font(.title)
-                .fontWeight(.bold)
-                .foregroundStyle(Theme.textPrimary)
-            Text("Settings & Preferences")
-                .font(.subheadline)
-                .foregroundStyle(Theme.textSecondary)
-        }
-    }
 
     private var hotkeysSection: some View {
         SettingsSection(title: "Hotkeys", iconName: "keyboard") {
@@ -241,7 +226,7 @@ struct SettingsWindow: View {
                     }
                     Spacer()
                 }
-                Text(Self.calibrationTip)
+                Text(BrightnessCurve.darkFloorCalibrationTip)
                     .font(.caption2)
                     .foregroundStyle(Theme.textSecondary)
             }

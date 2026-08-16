@@ -96,32 +96,4 @@ public struct M1DDCClient: Sendable {
         }
         return id
     }
-
-    // MARK: - Legacy CLI parser (kept for test backward compatibility)
-
-    static func parseDisplayList(_ text: String) -> [MonitorID] {
-        var monitors: [MonitorID] = []
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard trimmed.hasPrefix("[") else { continue }
-            guard let closeSlot = trimmed.firstIndex(of: "]") else { continue }
-            let slotString = trimmed[trimmed.index(after: trimmed.startIndex) ..< closeSlot]
-            guard let slot = Int(slotString) else { continue }
-
-            let rest = trimmed[trimmed.index(after: closeSlot)...].trimmingCharacters(in: .whitespaces)
-            guard let openParen = rest.lastIndex(of: "("),
-                  let closeParen = rest.lastIndex(of: ")"),
-                  openParen < closeParen else
-            {
-                monitors.append(MonitorID(slot: slot, displayName: rest, uuid: ""))
-                continue
-            }
-
-            let name = rest[..<openParen].trimmingCharacters(in: .whitespaces)
-            let uuid = String(rest[rest.index(after: openParen) ..< closeParen])
-            monitors.append(MonitorID(slot: slot, displayName: name, uuid: uuid))
-        }
-        return monitors
-    }
 }

@@ -15,6 +15,14 @@
 import Foundation
 
 public enum BrightnessCurve {
+    /// User-facing explanation of `Parameters.darkFloorLux`. Shown both in
+    /// onboarding and in Settings, so it lives next to the parameter it describes.
+    public static let darkFloorCalibrationTip = """
+    The ambient lux level where Min % brightness is correct. Open a white window, \
+    then hold white paper next to it. If the screen is brighter than the paper, \
+    raise this value until they match.
+    """
+
     /// Default parameter set matching PRD v0.4 confirmed values.
     public struct Parameters: Sendable, Equatable {
         public var minBrightness: Int

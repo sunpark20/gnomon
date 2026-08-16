@@ -21,7 +21,6 @@ struct MainWindow: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1.0)) { context in
-            let category = LuxCategory.classify(controller.emaLux)
             let elapsed = max(0, context.date.timeIntervalSince(messageEpoch))
             let turnIndex = Int(elapsed / turnDuration)
 
@@ -30,7 +29,6 @@ struct MainWindow: View {
                 HStack(alignment: .top, spacing: 20) {
                     AmbientSensorCard(
                         lux: controller.currentLux,
-                        category: category,
                         message: currentMessage,
                         monitorConnected: controller.monitorConnected
                     )

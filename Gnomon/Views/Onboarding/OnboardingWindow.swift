@@ -129,9 +129,6 @@ private struct CheckRow: View {
 }
 
 private struct CalibrationTip: View {
-    // swiftlint:disable:next line_length
-    static let calibrationTip = "The ambient lux level where Min % brightness is correct. Open a white window, then hold white paper next to it. If the screen is brighter than the paper, raise this value until they match."
-
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "moon.stars")
@@ -142,7 +139,7 @@ private struct CalibrationTip: View {
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundStyle(Theme.gold)
-                Text(Self.calibrationTip)
+                Text(BrightnessCurve.darkFloorCalibrationTip)
                     .font(.caption)
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)

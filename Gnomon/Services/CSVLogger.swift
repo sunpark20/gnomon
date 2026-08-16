@@ -80,10 +80,6 @@ public actor CSVLogger {
         self.retentionInterval = retentionInterval
     }
 
-    public var url: URL {
-        fileURL
-    }
-
     public static func defaultLogURL() -> URL {
         defaultLogDirectory().appendingPathComponent("log.csv", isDirectory: false)
     }

@@ -6,40 +6,6 @@
 import XCTest
 @testable import Gnomon
 
-final class M1DDCClientParseTests: XCTestCase {
-    func testParseSingleDisplay() {
-        let input = "[1] LG HDR 4K (57E749D2-BBF2-4931-8EBC-6B9A3D4FF8A2)"
-        let monitors = M1DDCClient.parseDisplayList(input)
-        XCTAssertEqual(monitors.count, 1)
-        XCTAssertEqual(monitors[0].slot, 1)
-        XCTAssertEqual(monitors[0].displayName, "LG HDR 4K")
-        XCTAssertEqual(monitors[0].uuid, "57E749D2-BBF2-4931-8EBC-6B9A3D4FF8A2")
-    }
-
-    func testParseMultiDisplay() {
-        let input = """
-        [1] LG HDR 4K (57E749D2-BBF2-4931-8EBC-6B9A3D4FF8A2)
-        [2] (null) (37D8832A-2D66-02CA-B9F7-8F30A301B230)
-        """
-        let monitors = M1DDCClient.parseDisplayList(input)
-        XCTAssertEqual(monitors.count, 2)
-        XCTAssertEqual(monitors[1].slot, 2)
-        XCTAssertEqual(monitors[1].displayName, "(null)")
-        XCTAssertEqual(monitors[1].uuid, "37D8832A-2D66-02CA-B9F7-8F30A301B230")
-    }
-
-    func testParseEmptyInput() {
-        XCTAssertTrue(M1DDCClient.parseDisplayList("").isEmpty)
-    }
-
-    func testParseMalformedLine() {
-        let input = "not a valid line\n[1] LG HDR 4K (UUID-HERE)\ngarbage\n"
-        let monitors = M1DDCClient.parseDisplayList(input)
-        XCTAssertEqual(monitors.count, 1)
-        XCTAssertEqual(monitors[0].displayName, "LG HDR 4K")
-    }
-}
-
 /// Integration tests that talk to the real hardware.
 /// Guarded by GNOMON_INTEGRATION=1 so CI and casual test runs don't need a monitor.
 final class M1DDCClientIntegrationTests: XCTestCase {

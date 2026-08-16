@@ -47,29 +47,23 @@ public final class WindowManager {
         }
     }
 
+    /// Hides every tracked window if any is visible, otherwise restores them.
     public func toggle() {
-        toggleAll()
+        let anyVisible = entries.values.contains { $0.window?.isVisible == true }
+        if anyVisible {
+            hideAll()
+        } else {
+            showAll()
+        }
     }
 
+    /// Brings the main window forward, recreating it if the user closed it.
     public func show() {
         bringAppForward()
         if let w = entries[.main]?.window {
             w.makeKeyAndOrderFront(nil)
         } else {
             reopenViaSwiftUI()
-        }
-    }
-
-    public func hide() {
-        entries[.main]?.window?.orderOut(nil)
-    }
-
-    public func toggleAll() {
-        let anyVisible = entries.values.contains { $0.window?.isVisible == true }
-        if anyVisible {
-            hideAll()
-        } else {
-            showAll()
         }
     }
 
@@ -81,13 +75,9 @@ public final class WindowManager {
         }
     }
 
+    /// Main window always comes back; Settings only if it was open when hidden.
     private func showAll() {
-        bringAppForward()
-        if let w = entries[.main]?.window {
-            w.makeKeyAndOrderFront(nil)
-        } else {
-            reopenViaSwiftUI()
-        }
+        show()
         if let w = entries[.settings]?.window, entries[.settings]?.wasVisible == true {
             w.makeKeyAndOrderFront(nil)
         }
