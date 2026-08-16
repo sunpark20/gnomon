@@ -104,3 +104,18 @@ B: T ≥ 66 → 255, T ≤ 19 → 0, else → 138.5177312231 × ln(T-10) - 305.0
 **기존**: `timestamp,raw_lux,ema_lux,target_brightness,sent_brightness,contrast,auto_on,manual_override,b_min,b_max`
 **신규**: `timestamp,raw_lux,ema_lux,target_brightness,gamma_brightness,cct,auto_on,manual_override,b_min,b_max`
 **마이그레이션**: CSVLogger.ensureFile()에서 헤더 불일치 감지 → 기존 파일을 `log.csv.v1`로 리네임, 새 헤더로 생성. 기존 데이터 보존.
+
+### ADR-012: 감마 apply read-back 검증 (Tahoe silent failure 대응)
+**배경**: macOS 26 Tahoe에서 `CGSetDisplayTransferByTable`이 `.success`를 반환하지만 실제 화면에 반영되지 않는
+버그가 두 차례 발생. ① 26 베타: 자동 밝기가 켜진 디스플레이에서 무시됨 → beta 5에서 수정
+(developer.apple.com/forums/thread/795074). ② 26.3~26.4: M5 Pro/Max에서 재발, 2026-06 기준 Apple이 재현
+확인했으나 미해결 (developer.apple.com/forums/thread/819331). f.lux, Lunar, BetterDisplay 등 감마 기반 앱 전부
+영향권이었음.
+**결정**: 반환값을 믿지 않고, apply 직후 `CGGetDisplayTransferByTable` read-back으로 실제 반영 여부를 검증
+**구현**:
+1. apply 성공 후 마지막으로 보낸 테이블을 캐시하고, read-back 테이블과 엔트리별 비교 (허용 오차 1/256)
+2. mismatch 시 1회 재적용 → 재검증
+3. 재검증도 실패하면 감마 미지원 상태로 전환: 자동 루프 일시 중단 + UI에 안내 표시 (무한 재시도 금지)
+**폴백 후보**: `ColorSyncDeviceSetCustomProfiles` 경로 (thread/819331에서 우회책으로 거론). v1에는 미구현,
+상태 표시까지만. OS 버그가 장기화되면 별도 ADR로 검토.
+**참고**: Gnomon 1.7.2의 DDC write read-back 검증(AutoLoopController)과 동일한 패턴의 감마 버전.

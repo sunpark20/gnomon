@@ -65,6 +65,9 @@ AutoLoopController를 DDC에서 GammaController로 전환한다. 이 step이 핵
 
 `syncIfNeeded()` / `snapSyncImmediately()`:
 - `writeBrightnessWithRetry()` → `gammaController.apply(brightness:, rMul:, gMul:, bMul:, displayID:)`
+- read-back 검증 유지 (ADR-012, Gnomon 1.7.2의 DDC read-back 패턴과 동일): apply 성공 후
+  `gammaController.verifyApplied(displayID:)` 호출. false면 1회 재적용 → 재검증. 그래도 false면
+  자동 루프를 일시 중단하고 UI에 감마 미지원 상태를 표시 (무한 재시도 금지).
 - deadband 비교: 기존 Int 비교에서 Float 비교로 변경 (abs(target - last) >= 0.02 등)
 - fade 사용: 일반 sync에서는 `gammaController.fade()` 사용, snap에서는 `apply()` 직접 (즉시 반응)
 

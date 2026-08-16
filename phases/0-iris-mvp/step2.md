@@ -6,7 +6,8 @@
 
 - `/CLAUDE.md`
 - `/docs/ARCHITECTURE.md` (데이터 흐름, 감마 테이블 적용 다이어그램)
-- `/docs/ADR.md` (ADR-002: 감마 테이블, ADR-003: 색온도, ADR-008: crash recovery, ADR-009: DisplayID)
+- `/docs/ADR.md` (ADR-002: 감마 테이블, ADR-003: 색온도, ADR-008: crash recovery, ADR-009: DisplayID,
+  ADR-012: read-back 검증)
 - `/docs/PRD.md` (상수 & 기본값 표, 감마 전환 애니메이션)
 - `/docs/DO_NOT_IMPLEMENT.md`
 - `/research/software-dimming-algorithms.md` (Tanner Helland 공식, Kruithof 테이블)
@@ -52,6 +53,7 @@ final class GammaController {
     func listDisplays() -> [DisplayID]
     func captureOriginal(displayID: CGDirectDisplayID)
     func apply(brightness: Float, rMul: Float, gMul: Float, bMul: Float, displayID: CGDirectDisplayID) -> CGError
+    func verifyApplied(displayID: CGDirectDisplayID) -> Bool
     func fade(from: Float, to: Float, rMul: Float, gMul: Float, bMul: Float, displayID: CGDirectDisplayID, duration: TimeInterval = 0.5, steps: Int = 30) async
     func restore()
 }
@@ -59,7 +61,8 @@ final class GammaController {
 
 **핵심 규칙:**
 - `captureOriginal`: 앱 시작 시 1회 호출. 256 엔트리 × RGB 3채널 원본 캐시. 원본 sum=0이면 identity table(i/255)로 대체 (crash recovery).
-- `apply`: `table[ch][i] = original[ch][i] × brightness × colorMul[ch]`. brightness는 0.08~1.0 클램프. CGError 반환.
+- `apply`: `table[ch][i] = original[ch][i] × brightness × colorMul[ch]`. brightness는 0.08~1.0 클램프. CGError 반환. 성공 시 마지막으로 보낸 테이블을 내부에 캐시 (verifyApplied용).
+- `verifyApplied`: `CGGetDisplayTransferByTable`로 현재 테이블을 read-back하여 마지막 apply 테이블과 엔트리별 비교 (허용 오차 1/256). macOS 26 Tahoe에서 `CGSetDisplayTransferByTable`이 success를 반환해도 실제 반영되지 않는 버그 대응 (ADR-012). apply 이력이 없으면 true 반환. `/PoC/main.swift`의 `verifyApplied` 참조 구현을 따를 것.
 - `fade`: from→to로 steps 단계에 걸쳐 smooth 전환. 각 단계 `apply` 호출 + `Task.sleep(nanoseconds: duration/steps)`. Task 취소 시 즉시 중단.
 - `restore`: `CGDisplayRestoreColorSyncSettings()` 호출 + 원본 테이블 직접 재적용 (belt-and-suspenders, ADR-008).
 

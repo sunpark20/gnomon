@@ -56,6 +56,9 @@ final class GammaController {
     private var origBlue = [CGGammaValue](repeating: 0, count: 256)
     private var sampleCount: UInt32 = 0
     private var captured = false
+    private var lastRed: [CGGammaValue] = []
+    private var lastGreen: [CGGammaValue] = []
+    private var lastBlue: [CGGammaValue] = []
 
     func capture(displayID: CGDirectDisplayID) {
         CGGetDisplayTransferByTable(
@@ -76,12 +79,42 @@ final class GammaController {
         let r = origRed.map { $0 * f }
         let g = origGreen.map { $0 * f }
         let b = origBlue.map { $0 * f }
-        return CGSetDisplayTransferByTable(displayID, sampleCount, r, g, b)
+        let err = CGSetDisplayTransferByTable(displayID, sampleCount, r, g, b)
+        if err == .success {
+            lastRed = r
+            lastGreen = g
+            lastBlue = b
+        }
+        return err
+    }
+
+    /// macOS 26 Tahoe can return .success from CGSetDisplayTransferByTable
+    /// without actually changing the screen (forums thread 819331), so the
+    /// only reliable signal is reading the table back and comparing.
+    func verifyApplied(displayID: CGDirectDisplayID) -> Bool {
+        guard !lastRed.isEmpty else { return true }
+        var r = [CGGammaValue](repeating: 0, count: 256)
+        var g = [CGGammaValue](repeating: 0, count: 256)
+        var b = [CGGammaValue](repeating: 0, count: 256)
+        var count: UInt32 = 0
+        guard CGGetDisplayTransferByTable(displayID, 256, &r, &g, &b, &count) == .success,
+              Int(count) == lastRed.count else { return false }
+        let epsilon: CGGammaValue = 1.0 / 256.0
+        for i in 0 ..< Int(count) {
+            let mismatch = abs(r[i] - lastRed[i]) > epsilon
+                || abs(g[i] - lastGreen[i]) > epsilon
+                || abs(b[i] - lastBlue[i]) > epsilon
+            if mismatch { return false }
+        }
+        return true
     }
 
     func restore() {
         CGDisplayRestoreColorSyncSettings()
         captured = false
+        lastRed = []
+        lastGreen = []
+        lastBlue = []
     }
 }
 
@@ -231,6 +264,8 @@ final class PoCDelegate: NSObject, NSApplicationDelegate {
         let err = gamma.apply(brightness: val, displayID: selectedDisplay)
         if err != .success {
             log("CGSetDisplayTransferByTable error: \(err.rawValue)")
+        } else if !gamma.verifyApplied(displayID: selectedDisplay) {
+            log("Read-back mismatch: gamma NOT applied (Tahoe silent failure, ADR-012)")
         }
     }
 
