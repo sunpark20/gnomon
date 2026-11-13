@@ -204,8 +204,13 @@ gh release create "$TAG" "$DMG_PATH" \
     --generate-notes \
     --draft
 
-gh release upload "$TAG" "$APPCAST_PATH" --repo "$GITHUB_REPO" --clobber
-RELEASE_ID="$(gh api "repos/${GITHUB_REPO}/releases/tags/${TAG}" --jq .id)"
+RELEASE_ID="$(gh api "repos/${GITHUB_REPO}/releases?per_page=100" \
+    --jq ".[] | select(.draft == true and .tag_name == \"${TAG}\") | .id" | head -1)"
+if [ -z "$RELEASE_ID" ]; then
+    echo -e "${RED}Could not find the draft release for ${TAG}.${NC}"
+    exit 1
+fi
+python3 Scripts/upload_release_asset.py "$RELEASE_ID" "$APPCAST_PATH"
 gh api --method PATCH "repos/${GITHUB_REPO}/releases/${RELEASE_ID}" -F draft=false >/dev/null
 
 echo -e "\n${GREEN}✓ Released Gnomon v${VERSION}${NC}"
