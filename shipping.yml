@@ -4,14 +4,15 @@ app:
   display_name: Gnomon
   display_name_ko: Gnomon
   tagline_ko: "MacBook 조도센서로 외장 모니터 밝기를 자동으로 맞춰줍니다"
+  tagline_en: "Automatically matches external monitor brightness using your MacBook's ambient light sensor"
   platforms: [macos]
   bundle_ids: [com.sunguk.gnomon.Gnomon]
   min_os: "macOS 15.0+, Apple Silicon"
-  version: "1.8.0"
+  version: "1.8.1"
   status: released
-  updated_at: "2026.08"
+  updated_at: "2026.11"
 release:
-  macos: "https://github.com/sunpark20/gnomon/releases/tag/v1.8.0"
+  macos: "https://github.com/sunpark20/gnomon/releases/tag/v1.8.1"
 web:
   privacy: "https://homeninja.vercel.app/privacy/gnomon"
   support: "https://homeninja.vercel.app/support/gnomon"

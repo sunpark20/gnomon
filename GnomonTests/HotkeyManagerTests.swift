@@ -50,7 +50,7 @@ final class HotkeyManagerTests: XCTestCase {
 
     func testDefaultTogglesMapping() throws {
         let manager = HotkeyManager()
-        let auto = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_B, modifiers: required))
+        let auto = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_A, modifiers: required))
         XCTAssertEqual(manager.mapAction(from: auto), .toggleAuto)
         let window = try XCTUnwrap(makeEvent(keyCode: kVK_ANSI_G, modifiers: required))
         XCTAssertEqual(manager.mapAction(from: window), .toggleWindow)

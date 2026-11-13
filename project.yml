@@ -18,9 +18,12 @@ settings:
     DEVELOPMENT_TEAM: ""
 
 packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: "2.9.4"
   ReportKit:
-    url: https://github.com/sunpark20/report-kit.git
-    from: "1.0.0"
+    url: https://github.com/sunpark20/errorreport.git
+    from: "1.1.0"
 
 targets:
   Gnomon:
@@ -35,18 +38,29 @@ targets:
     resources:
       - path: Gnomon/Resources/Assets.xcassets
     dependencies:
+      - package: Sparkle
+        product: Sparkle
       - package: ReportKit
         product: ReportKit
+    info:
+      path: Gnomon/Info.plist
+      properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSUIElement: true
+        NSHumanReadableCopyright: "Copyright © 2026 Sunguk. All rights reserved."
+        SUFeedURL: https://github.com/sunpark20/gnomon/releases/latest/download/appcast.xml
+        SUPublicEDKey: "wBUCXSlLBwDeXgiyw1xXVyylzPTZpffS/fqhHy7JLl0="
+        SURequireSignedFeed: true
+        SUVerifyUpdateBeforeExtraction: true
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 86400
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sunguk.gnomon.Gnomon
         PRODUCT_NAME: Gnomon
-        MARKETING_VERSION: "1.8.0"
-        CURRENT_PROJECT_VERSION: "2"
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_LSUIElement: YES
-        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 Sunguk. All rights reserved."
-        INFOPLIST_KEY_NSMainStoryboardFile: ""
+        MARKETING_VERSION: "1.8.1"
+        CURRENT_PROJECT_VERSION: "3"
         COMBINE_HIDPI_IMAGES: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_HARDENED_RUNTIME: YES

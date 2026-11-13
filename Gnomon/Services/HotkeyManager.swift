@@ -59,7 +59,7 @@ public struct KeyBinding: Sendable, Codable, Equatable {
         .brightnessDown: KeyBinding(modifiers: controlOptionCommand, keyCode: UInt16(kVK_ANSI_Minus)),
         .contrastUp: KeyBinding(modifiers: controlOptionCommand, keyCode: UInt16(kVK_ANSI_RightBracket)),
         .contrastDown: KeyBinding(modifiers: controlOptionCommand, keyCode: UInt16(kVK_ANSI_LeftBracket)),
-        .toggleAuto: KeyBinding(modifiers: controlOptionCommand, keyCode: UInt16(kVK_ANSI_B)),
+        .toggleAuto: KeyBinding(modifiers: controlOptionCommand, keyCode: UInt16(kVK_ANSI_A)),
         .toggleWindow: KeyBinding(modifiers: controlOptionCommand, keyCode: UInt16(kVK_ANSI_G)),
     ]
 
@@ -163,6 +163,10 @@ public struct KeyBinding: Sendable, Codable, Equatable {
 /// Persistence helper for per-action bindings.
 public enum HotkeyBindingStore {
     private static let defaultsKey = "hotkeyBindings.v1"
+    private static let previousToggleAutoDefault = KeyBinding(
+        modifiers: KeyBinding.controlOptionCommand,
+        keyCode: UInt16(kVK_ANSI_B)
+    )
 
     public static func load() -> [HotkeyAction: KeyBinding] {
         guard let data = UserDefaults.standard.data(forKey: defaultsKey) else {
@@ -174,6 +178,12 @@ public enum HotkeyBindingStore {
                 if let action = HotkeyAction(rawValue: key) {
                     result[action] = value
                 }
+            }
+            if result[.toggleAuto] == previousToggleAutoDefault,
+               let updatedDefault = KeyBinding.defaults[.toggleAuto]
+            {
+                result[.toggleAuto] = updatedDefault
+                save(result)
             }
             return result
         }
