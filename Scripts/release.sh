@@ -183,6 +183,20 @@ python3 scripts/create_appcast.py \
 python3 -c 'import sys, xml.etree.ElementTree as ET; ET.parse(sys.argv[1])' "$APPCAST_PATH"
 
 # ── GitHub Release ─────────────────────────────────────────────────
+RELEASE_COMMIT="$(git rev-parse HEAD)"
+if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+    if ! git show-ref --verify --quiet "refs/tags/${TAG}"; then
+        git fetch origin "refs/tags/${TAG}:refs/tags/${TAG}"
+    fi
+    if [ "$(git rev-parse "${TAG}^{commit}")" != "$RELEASE_COMMIT" ]; then
+        echo -e "${RED}Tag ${TAG} already points to a different commit.${NC}"
+        exit 1
+    fi
+else
+    git tag -a "$TAG" "$RELEASE_COMMIT" -m "Gnomon ${TAG}"
+    git push origin "refs/tags/${TAG}"
+fi
+
 echo -e "\n${YELLOW}▶ Creating draft GitHub release${NC}"
 gh release create "$TAG" "$DMG_PATH" \
     --repo "$GITHUB_REPO" \
