@@ -15,7 +15,7 @@
 #   6. Sparkle EdDSA signing key saved in the login Keychain as account "gnomon"
 #
 # Usage: ./Scripts/release.sh [version]
-#   version: e.g. "1.4.0" (defaults to MARKETING_VERSION in project.yml)
+#   version: must match MARKETING_VERSION in project.yml
 
 set -euo pipefail
 
@@ -39,9 +39,11 @@ SPARKLE_SHA256="ce89daf967db1e1893ed3ebd67575ed82d3902563e3191ca92aaec9164fbdef9
 SPARKLE_ACCOUNT="gnomon"
 
 # ── Version ────────────────────────────────────────────────────────
-VERSION="${1:-}"
-if [ -z "$VERSION" ]; then
-    VERSION=$(grep 'MARKETING_VERSION' project.yml | head -1 | sed -E 's/.*: *"?([0-9.]+)"?.*/\1/')
+PROJECT_VERSION=$(sed -nE 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"?([0-9.]+)"?$/\1/p' project.yml | head -1)
+VERSION="${1:-$PROJECT_VERSION}"
+if [ "$VERSION" != "$PROJECT_VERSION" ]; then
+    echo -e "${RED}Version ${VERSION} must match MARKETING_VERSION ${PROJECT_VERSION}.${NC}"
+    exit 1
 fi
 echo -e "${YELLOW}Building Gnomon v${VERSION}${NC}"
 
