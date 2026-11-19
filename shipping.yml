@@ -8,11 +8,11 @@ app:
   platforms: [macos]
   bundle_ids: [com.sunguk.gnomon.Gnomon]
   min_os: "macOS 15.0+, Apple Silicon"
-  version: "1.8.1"
+  version: "1.8.2"
   status: released
   updated_at: "2026.11"
 release:
-  macos: "https://github.com/sunpark20/gnomon/releases/tag/v1.8.1"
+  macos: "https://github.com/sunpark20/gnomon/releases/tag/v1.8.2"
 web:
   privacy: "https://homeninja.vercel.app/privacy/gnomon"
   support: "https://homeninja.vercel.app/support/gnomon"
