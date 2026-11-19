@@ -10,27 +10,28 @@ import SwiftUI
 @main
 struct GnomonApp: App {
     @NSApplicationDelegateAdaptor(GnomonAppDelegate.self) private var appDelegate
-    @State private var controller = AutoLoopController()
-    @State private var hotkeys = HotkeyManager()
+    private var controller: AutoLoopController {
+        appDelegate.controller
+    }
+
     @State private var onboarding = OnboardingViewModel()
     @AppStorage("onboardingCompletedAt") private var onboardingCompletedAt: Double = 0
 
     var body: some Scene {
         WindowGroup(Self.mainWindowTitle, id: "main") {
             Group {
-                if onboardingCompletedAt > 0 {
+                if GnomonAppDelegate.isHostedTest {
+                    EmptyView()
+                } else if onboardingCompletedAt > 0 {
                     MainWindow(controller: controller)
                         .background(WindowAccessor { window in
                             WindowManager.shared.register(window, id: .main)
                         })
                         .background(FrameAutosave(name: "GnomonMainWindow"))
-                        .task {
-                            await controller.start()
-                            wireHotkeys()
-                        }
                 } else {
                     OnboardingWindow(viewModel: onboarding) {
                         onboardingCompletedAt = Date().timeIntervalSince1970
+                        appDelegate.startControls()
                     }
                     .frame(width: 520, height: 580)
                     .background(WindowAccessor { window in
@@ -52,41 +53,6 @@ struct GnomonApp: App {
         }
         .windowResizability(.contentMinSize)
         .defaultSize(width: 480, height: 900)
-    }
-
-    @MainActor
-    private func wireHotkeys() {
-        hotkeys.onAction = { action in
-            switch action {
-            case .brightnessUp:
-                let base = controller.lastSentBrightness ?? controller.targetBrightness
-                controller.userSetBrightness(base + 5)
-            case .brightnessDown:
-                let base = controller.lastSentBrightness ?? controller.targetBrightness
-                controller.userSetBrightness(base - 5)
-            case .contrastUp:
-                controller.userSetContrast(controller.contrast + 5)
-            case .contrastDown:
-                controller.userSetContrast(controller.contrast - 5)
-            case .toggleAuto:
-                controller.toggleAuto()
-            case .toggleWindow:
-                NotificationCenter.default.post(name: .gnomonToggleWindow, object: nil)
-            }
-        }
-        hotkeys.start()
-
-        NotificationCenter.default.addObserver(
-            forName: .gnomonHotkeysChanged,
-            object: nil,
-            queue: .main
-        ) { _ in
-            Task { @MainActor in
-                hotkeys.stop()
-                hotkeys = HotkeyManager()
-                wireHotkeys()
-            }
-        }
     }
 
     private static var mainWindowTitle: String {

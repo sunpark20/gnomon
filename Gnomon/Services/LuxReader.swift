@@ -1,80 +1,63 @@
-//
-//  LuxReader.swift
-//  Gnomon
-//
-//  Reads the MacBook's ambient light sensor value by invoking
-//  `/usr/libexec/corebrightnessdiag status-info` and parsing
-//  the `AggregatedLux` key from its plist output.
-//
-
 import Foundation
+import IOKit
 
+/// Reads the ambient light value published by the built-in display driver.
 public struct LuxReader: Sendable {
     public enum ReadError: Error, LocalizedError {
-        case valueNotFound
-        case invalidOutput
+        case serviceNotFound
+        case propertyNotFound
+        case invalidReading
 
         public var errorDescription: String? {
             switch self {
-            case .valueNotFound: "AggregatedLux key not found in corebrightnessdiag output"
-            case .invalidOutput: "corebrightnessdiag returned invalid output"
+            case .serviceNotFound: "Built-in display sensor service not found"
+            case .propertyNotFound: "AmbientBrightness property not found"
+            case .invalidReading: "Invalid ambient light sensor value"
             }
         }
     }
 
-    public static let defaultPath = "/usr/libexec/corebrightnessdiag"
+    public init() {}
 
-    public let executablePath: String
-
-    public init(executablePath: String = LuxReader.defaultPath) {
-        self.executablePath = executablePath
-    }
-
-    /// Returns the most recent aggregated lux reading from the built-in ALS.
-    ///
-    /// Uses the `AggregatedLux` key which macOS itself uses for auto-brightness
-    /// decisions. Value is in lux (physical illuminance).
     public func currentLux() async throws -> Double {
-        let stdout = try await ProcessRunner.run(executablePath, args: ["status-info"])
-        return try Self.extractAggregatedLux(from: stdout)
+        try Task.checkCancellation()
+        guard let matching = IOServiceMatching("IOMobileFramebufferShim") else {
+            throw ReadError.serviceNotFound
+        }
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else {
+            throw ReadError.serviceNotFound
+        }
+        defer { IOObjectRelease(iterator) }
+
+        while case let service = IOIteratorNext(iterator), service != IO_OBJECT_NULL {
+            defer { IOObjectRelease(service) }
+            guard Self.isBuiltIn(service) else { continue }
+            let value = IORegistryEntryCreateCFProperty(
+                service, "AmbientBrightness" as CFString, kCFAllocatorDefault, 0
+            )?.takeRetainedValue()
+            return try Self.decodeLux(value)
+        }
+        throw ReadError.serviceNotFound
     }
 
-    /// Parses the textual output and pulls out the `AggregatedLux` number.
-    ///
-    /// The output mixes XML-plist and Objective-C description dumps. We first
-    /// try the Objective-C dictionary form (`AggregatedLux = 109.17;`) because
-    /// it's simpler and stable; fall back to the XML form.
-    static func extractAggregatedLux(from output: String) throws -> Double {
-        if let value = extractObjCStyle(key: "AggregatedLux", from: output) {
-            return value
+    private static func isBuiltIn(_ service: io_service_t) -> Bool {
+        var parent: io_registry_entry_t = 0
+        guard IORegistryEntryGetParentEntry(service, kIOServicePlane, &parent) == KERN_SUCCESS else {
+            return false
         }
-        if let value = extractXMLPlistStyle(key: "AggregatedLux", from: output) {
-            return value
-        }
-        throw ReadError.valueNotFound
+        defer { IOObjectRelease(parent) }
+        let name = IORegistryEntryCreateCFProperty(
+            parent, "name" as CFString, kCFAllocatorDefault, 0
+        )?.takeRetainedValue() as? Data
+        // The IODeviceTree name is NUL-terminated data.
+        return name?.prefix(while: { $0 != 0 }).elementsEqual("disp0".utf8) == true
     }
 
-    private static func extractObjCStyle(key: String, from text: String) -> Double? {
-        // Matches `  AggregatedLux = "109.17";` or `  AggregatedLux = 109.17;`
-        let pattern = #"\b\#(key)\s*=\s*"?(-?[0-9]+(?:\.[0-9]+)?)"?\s*;"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-        let range = NSRange(text.startIndex..., in: text)
-        guard let match = regex.firstMatch(in: text, options: [], range: range),
-              match.numberOfRanges > 1,
-              let numberRange = Range(match.range(at: 1), in: text) else { return nil }
-        return Double(text[numberRange])
-    }
-
-    private static func extractXMLPlistStyle(key: String, from text: String) -> Double? {
-        // Matches `<key>AggregatedLux</key>\s*<real>109.17</real>`
-        let pattern = #"<key>\#(key)</key>\s*<real>(-?[0-9]+(?:\.[0-9]+)?)</real>"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else {
-            return nil
-        }
-        let range = NSRange(text.startIndex..., in: text)
-        guard let match = regex.firstMatch(in: text, options: [], range: range),
-              match.numberOfRanges > 1,
-              let numberRange = Range(match.range(at: 1), in: text) else { return nil }
-        return Double(text[numberRange])
+    static func decodeLux(_ value: CFTypeRef?) throws -> Double {
+        guard let value else { throw ReadError.propertyNotFound }
+        guard CFGetTypeID(value) == CFNumberGetTypeID(), let number = value as? NSNumber,
+              let raw = UInt32(exactly: number.doubleValue) else { throw ReadError.invalidReading }
+        return Double(raw) / 65536
     }
 }

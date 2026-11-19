@@ -10,7 +10,7 @@ import SwiftUI
 
 struct BrightnessCard: View {
     @Bindable var controller: AutoLoopController
-    let nextSyncSecondsRemaining: Int
+    let isWindowVisible: Bool
     let onSyncNow: () -> Void
     @State private var isEditingNumber = false
     @State private var editText = ""
@@ -148,13 +148,14 @@ struct BrightnessCard: View {
                     .labelStyle(.titleAndIcon)
             }
             .buttonStyle(.bordered)
-            HStack(spacing: 6) {
-                Image(systemName: "timer")
-                    .foregroundStyle(Theme.textSecondary)
-                Text("Next sync in \(max(0, nextSyncSecondsRemaining))s")
-                    .font(.caption)
-                    .foregroundStyle(Theme.textSecondary)
-                    .monospacedDigit()
+            if isWindowVisible, let deadline = controller.nextSyncAt {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let seconds = max(0, Int(ceil(deadline.timeIntervalSince(context.date))))
+                    Label("Next sync in \(seconds)s", systemImage: "timer")
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                        .monospacedDigit()
+                }
             }
         }
     }

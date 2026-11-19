@@ -9,6 +9,7 @@ import Foundation
 
 struct AutoLoopDependencies {
     let currentLux: @Sendable () async throws -> Double
+    let hasOnlineExternalDisplay: @Sendable () -> Bool
     let listDisplays: @Sendable () async throws -> [MonitorID]
     let getBrightness: @Sendable (MonitorID) async throws -> Int
     let setBrightness: @Sendable (Int, MonitorID) async throws -> Void
@@ -28,6 +29,7 @@ struct AutoLoopDependencies {
             currentLux: {
                 try await luxReader.currentLux()
             },
+            hasOnlineExternalDisplay: M1DDCClient.hasOnlineExternalDisplay,
             listDisplays: {
                 try await ddcClient.listDisplays()
             },

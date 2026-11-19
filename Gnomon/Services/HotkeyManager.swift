@@ -214,25 +214,32 @@ public final class HotkeyManager {
     nonisolated(unsafe) static var active: HotkeyManager?
     private var hotKeyRefs: [EventHotKeyRef] = []
     private var eventHandlerRef: EventHandlerRef?
+    private var bindingsObserver: NSObjectProtocol?
 
     public init() {
         bindings = HotkeyBindingStore.load()
     }
 
     public func start() {
-        stop()
+        guard bindingsObserver == nil else { return }
         HotkeyManager.active = self
         installCarbonHandler()
-        for (action, binding) in bindings where !binding.isDisabled {
-            registerHotkey(action: action, binding: binding)
+        reloadRegistrations()
+        bindingsObserver = NotificationCenter.default.addObserver(
+            forName: .gnomonHotkeysChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.reloadRegistrations()
+            }
         }
     }
 
     public func stop() {
-        for ref in hotKeyRefs {
-            UnregisterEventHotKey(ref)
+        if let bindingsObserver {
+            NotificationCenter.default.removeObserver(bindingsObserver)
+            self.bindingsObserver = nil
         }
-        hotKeyRefs.removeAll()
+        unregisterHotkeys()
         if let handler = eventHandlerRef {
             RemoveEventHandler(handler)
             eventHandlerRef = nil
@@ -240,6 +247,21 @@ public final class HotkeyManager {
         if HotkeyManager.active === self {
             HotkeyManager.active = nil
         }
+    }
+
+    private func reloadRegistrations() {
+        unregisterHotkeys()
+        bindings = HotkeyBindingStore.load()
+        for (action, binding) in bindings where !binding.isDisabled {
+            registerHotkey(action: action, binding: binding)
+        }
+    }
+
+    private func unregisterHotkeys() {
+        for ref in hotKeyRefs {
+            UnregisterEventHotKey(ref)
+        }
+        hotKeyRefs.removeAll()
     }
 
     public func setBinding(_ binding: KeyBinding, for action: HotkeyAction) {

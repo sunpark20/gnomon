@@ -81,6 +81,28 @@ final class HotkeyManagerTests: XCTestCase {
         XCTAssertNotEqual(manager.mapAction(from: oldDefault), .brightnessUp)
     }
 
+    func testBindingChangesObservedOnlyWhileStarted() {
+        let manager = HotkeyManager()
+        defer {
+            manager.stop()
+            HotkeyBindingStore.reset()
+        }
+        let binding = KeyBinding(modifiers: required, keyCode: UInt16(kVK_ANSI_X))
+        manager.start()
+        manager.start()
+        HotkeyBindingStore.save([.brightnessUp: binding])
+        NotificationCenter.default.post(name: .gnomonHotkeysChanged, object: nil)
+        XCTAssertEqual(manager.bindings[.brightnessUp], binding)
+
+        manager.stop()
+        HotkeyBindingStore.reset()
+        NotificationCenter.default.post(name: .gnomonHotkeysChanged, object: nil)
+        XCTAssertEqual(manager.bindings[.brightnessUp], binding)
+
+        manager.start()
+        XCTAssertEqual(manager.bindings[.brightnessUp], KeyBinding.defaults[.brightnessUp])
+    }
+
     func testHumanReadableFormat() {
         let binding = KeyBinding(modifiers: [.control, .option, .command], keyCode: UInt16(kVK_ANSI_Equal))
         XCTAssertEqual(binding.humanReadable, "⌃ ⌥ ⌘ =")

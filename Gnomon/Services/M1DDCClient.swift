@@ -6,6 +6,7 @@
 //  No external binary dependency — replaces the old m1ddc shell-out.
 //
 
+import CoreGraphics
 import Foundation
 
 public struct M1DDCClient: Sendable {
@@ -29,6 +30,17 @@ public struct M1DDCClient: Sendable {
     public init() {}
 
     // MARK: - Discovery
+
+    /// Cheap check before background retries. Include mirrors and external-only setups.
+    static func hasOnlineExternalDisplay() -> Bool {
+        var count: UInt32 = 0
+        guard CGGetOnlineDisplayList(0, nil, &count) == .success else { return true }
+        guard count > 0 else { return false }
+        var displays = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        let capacity = count
+        guard CGGetOnlineDisplayList(capacity, &displays, &count) == .success else { return true }
+        return displays.prefix(Int(count)).contains { CGDisplayIsBuiltin($0) == 0 }
+    }
 
     public func listDisplays() async throws -> [MonitorID] {
         let displays = await Task.detached {

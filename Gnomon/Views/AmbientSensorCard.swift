@@ -10,10 +10,10 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import SwiftUI
 
-struct AmbientSensorCard: View {
+struct AmbientSensorCard<Message: View>: View {
     let lux: Double
-    let message: DisplayMessage
     var monitorConnected = true
+    @ViewBuilder let message: () -> Message
 
     var body: some View {
         VStack(spacing: 0) {
@@ -76,7 +76,7 @@ struct AmbientSensorCard: View {
         }
         .padding(32)
         .overlay(alignment: .bottom) {
-            messageView
+            message()
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.horizontal, 32)
                 .padding(.bottom, 32)
@@ -86,8 +86,54 @@ struct AmbientSensorCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
-    @ViewBuilder
-    private var messageView: some View {
+    private var formattedLux: String {
+        String(format: "%.0f", max(0, lux))
+    }
+
+    /// Stylised MacBook silhouette with a glowing dot at the sensor location
+    /// (top-center of the lid, where the camera module sits).
+    private var macBookBadge: some View {
+        ZStack(alignment: .top) {
+            Image(systemName: "laptopcomputer")
+                .font(.system(size: 26))
+                .foregroundStyle(Theme.textPrimary)
+            Circle()
+                .fill(Theme.gold)
+                .frame(width: 5, height: 5)
+                .shadow(color: Theme.gold.opacity(0.9), radius: 4)
+                .shadow(color: Theme.gold.opacity(0.6), radius: 10)
+                .offset(y: 3)
+                .opacity(0.4 + min(1, lightIntensity) * 0.6)
+        }
+        .frame(width: 36, height: 28)
+    }
+
+    private var lightIntensity: Double {
+        min(1, log10(max(1, lux)) / log10(2001))
+    }
+
+    private var disconnectedBadge: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "bolt.slash.fill")
+                .font(.system(size: 11))
+            Text("Disconnected")
+                .font(.caption2.weight(.medium))
+        }
+        .foregroundStyle(Theme.textSecondary.opacity(0.6))
+    }
+
+    private var gaugeFraction: Double {
+        // Log scale mirror of the brightness curve so the bar tracks perception.
+        let ceiling = 2000.0
+        let normalized = log10(max(0, lux) + 1) / log10(ceiling + 1)
+        return min(1, max(0, normalized))
+    }
+}
+
+struct SensorMessageView: View {
+    let message: DisplayMessage
+
+    var body: some View {
         switch message {
         case let .witty(phrase):
             Text(phrase)
@@ -127,57 +173,6 @@ struct AmbientSensorCard: View {
             }
         }
     }
-
-    private var formattedLux: String {
-        String(format: "%.0f", max(0, lux))
-    }
-
-    /// Stylised MacBook silhouette with a glowing dot at the sensor location
-    /// (top-center of the lid, where the camera module sits).
-    private var macBookBadge: some View {
-        ZStack(alignment: .top) {
-            Image(systemName: "laptopcomputer")
-                .font(.system(size: 26))
-                .foregroundStyle(Theme.textPrimary)
-            Circle()
-                .fill(Theme.gold)
-                .frame(width: 5, height: 5)
-                .shadow(color: Theme.gold.opacity(0.9), radius: 4)
-                .shadow(color: Theme.gold.opacity(0.6), radius: 10)
-                .offset(y: 3)
-                .opacity(0.4 + min(1, pulseIntensity) * 0.6)
-                .animation(.easeInOut(duration: 1.6).repeatForever(), value: pulseIntensity)
-        }
-        .frame(width: 36, height: 28)
-    }
-
-    /// Pulse intensity mapped to lux so the sensor dot glows brighter when the
-    /// sensor is actually reading a strong signal — tiny but satisfying.
-    private var pulseIntensity: Double {
-        min(1, log10(max(1, lux)) / log10(2001))
-    }
-
-    private var disconnectedBadge: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "bolt.slash.fill")
-                .font(.system(size: 11))
-            Text("Disconnected")
-                .font(.caption2.weight(.medium))
-        }
-        .foregroundStyle(Theme.textSecondary.opacity(0.6))
-        .phaseAnimator([false, true]) { content, phase in
-            content.opacity(phase ? 1.0 : 0.3)
-        } animation: { _ in
-            .easeInOut(duration: 1.0)
-        }
-    }
-
-    private var gaugeFraction: Double {
-        // Log scale mirror of the brightness curve so the bar tracks perception.
-        let ceiling = 2000.0
-        let normalized = log10(max(0, lux) + 1) / log10(ceiling + 1)
-        return min(1, max(0, normalized))
-    }
 }
 
 private struct QRCodeImage: View {
@@ -215,20 +210,17 @@ private struct QRCodeImage: View {
 }
 
 #Preview("Night") {
-    AmbientSensorCard(
-        lux: 17,
-        message: .witty("Night-raid-ready illumination. Grab your gear.")
-    )
+    AmbientSensorCard(lux: 17) {
+        SensorMessageView(message: .witty("Night-raid-ready illumination. Grab your gear."))
+    }
     .padding()
     .background(Theme.background)
 }
 
 #Preview("Disconnected") {
-    AmbientSensorCard(
-        lux: 26,
-        message: .witty("The Goldshire Inn glows softer than this. Cozy."),
-        monitorConnected: false
-    )
+    AmbientSensorCard(lux: 26, monitorConnected: false) {
+        SensorMessageView(message: .witty("The Goldshire Inn glows softer than this. Cozy."))
+    }
     .padding()
     .background(Theme.background)
 }

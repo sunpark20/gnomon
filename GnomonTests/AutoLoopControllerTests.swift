@@ -12,15 +12,19 @@ private enum AutoLoopFakeError: Error {
 
 private let autoLoopTestMonitor = MonitorID(slot: 1, displayName: "Test Display", uuid: "123")
 
-private actor AutoLoopFakeState {
+actor AutoLoopFakeState {
     nonisolated let monitor = autoLoopTestMonitor
     var lux: Double = 44
+    var luxReads = 0
+    var pendingLux: CheckedContinuation<Double, Never>?
+    var shouldHoldLux = false
     var monitors: [MonitorID]
     var brightness: Int
     var contrast = 70
     var writes: [Int] = []
     var listCalls = 0
     var failedWritesRemaining = 0
+    var failedBrightnessReadsRemaining = 0
     var ignoredWritesRemaining = 0
     var monitorBatches: [[MonitorID]] = []
     var logEntries: [CSVLogEntry] = []
@@ -30,8 +34,22 @@ private actor AutoLoopFakeState {
         self.brightness = brightness
     }
 
-    func currentLux() -> Double {
-        lux
+    func currentLux() async -> Double {
+        luxReads += 1
+        if shouldHoldLux {
+            shouldHoldLux = false
+            return await withCheckedContinuation { pendingLux = $0 }
+        }
+        return lux
+    }
+
+    func holdNextLux() {
+        shouldHoldLux = true
+    }
+
+    func releaseLux(_ reading: Double) {
+        pendingLux?.resume(returning: reading)
+        pendingLux = nil
     }
 
     func listDisplays() -> [MonitorID] {
@@ -42,8 +60,12 @@ private actor AutoLoopFakeState {
         return monitors
     }
 
-    func getBrightness(on monitor: MonitorID) -> Int {
-        brightness
+    func getBrightness(on monitor: MonitorID) throws -> Int {
+        if failedBrightnessReadsRemaining > 0 {
+            failedBrightnessReadsRemaining -= 1
+            throw M1DDCClient.ClientError.ddcReadFailed
+        }
+        return brightness
     }
 
     func setBrightness(_ value: Int, on monitor: MonitorID) throws {
@@ -71,12 +93,20 @@ private actor AutoLoopFakeState {
         logEntries.append(entry)
     }
 
+    func setHardwareBrightness(_ value: Int) {
+        brightness = value
+    }
+
     func clearWrites() {
         writes.removeAll()
     }
 
     func setFailedWritesRemaining(_ count: Int) {
         failedWritesRemaining = count
+    }
+
+    func failNextBrightnessReads(_ count: Int) {
+        failedBrightnessReadsRemaining = count
     }
 
     func setIgnoredWritesRemaining(_ count: Int) {
@@ -90,18 +120,20 @@ private actor AutoLoopFakeState {
 
 @MainActor
 final class AutoLoopControllerTests: XCTestCase {
-    private func makeController(
-        state: AutoLoopFakeState = AutoLoopFakeState()
+    func makeController(
+        state: AutoLoopFakeState = AutoLoopFakeState(),
+        hasOnlineExternalDisplay: @escaping @Sendable () -> Bool = { true }
     ) -> AutoLoopController {
         let controller = AutoLoopController(dependencies: AutoLoopDependencies(
             currentLux: {
                 await state.currentLux()
             },
+            hasOnlineExternalDisplay: hasOnlineExternalDisplay,
             listDisplays: {
                 await state.listDisplays()
             },
             getBrightness: { monitor in
-                await state.getBrightness(on: monitor)
+                try await state.getBrightness(on: monitor)
             },
             setBrightness: { value, monitor in
                 try await state.setBrightness(value, on: monitor)
@@ -121,6 +153,21 @@ final class AutoLoopControllerTests: XCTestCase {
         ))
         controller.brightnessVerificationDelay = .zero
         return controller
+    }
+
+    func waitUntil(
+        _ condition: () async -> Bool,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        let deadline = ContinuousClock.now + .seconds(3)
+        while await !condition() {
+            guard ContinuousClock.now < deadline else {
+                XCTFail("Timed out waiting for controller", file: file, line: line)
+                throw AutoLoopFakeError.writeFailed
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
     }
 
     func testUserSetBrightnessDisablesAuto() {
@@ -172,7 +219,8 @@ final class AutoLoopControllerTests: XCTestCase {
         let state = AutoLoopFakeState(brightness: 50)
         let controller = makeController(state: state)
         await controller.start()
-        controller.stop()
+        defer { controller.stop() }
+        try await waitUntil { controller.nextSyncAt != nil }
         await state.clearWrites()
 
         controller.toggleAuto()
@@ -188,7 +236,8 @@ final class AutoLoopControllerTests: XCTestCase {
         let state = AutoLoopFakeState(brightness: 50)
         let controller = makeController(state: state)
         await controller.start()
-        controller.stop()
+        defer { controller.stop() }
+        try await waitUntil { controller.nextSyncAt != nil }
         controller.displayRecoveryDelays = [.zero]
         await state.clearWrites()
 
@@ -204,7 +253,8 @@ final class AutoLoopControllerTests: XCTestCase {
         let state = AutoLoopFakeState(brightness: 50)
         let controller = makeController(state: state)
         await controller.start()
-        controller.stop()
+        defer { controller.stop() }
+        try await waitUntil { controller.nextSyncAt != nil }
         await state.clearWrites()
         await state.setFailedWritesRemaining(2)
 
@@ -225,8 +275,10 @@ final class AutoLoopControllerTests: XCTestCase {
         let state = AutoLoopFakeState(brightness: 85)
         let controller = makeController(state: state)
         await controller.start()
-        controller.stop()
+        defer { controller.stop() }
+        try await waitUntil { controller.nextSyncAt != nil }
         await state.clearWrites()
+        await state.setHardwareBrightness(85)
         await state.setIgnoredWritesRemaining(1)
 
         controller.applyNow()
@@ -244,8 +296,10 @@ final class AutoLoopControllerTests: XCTestCase {
         let state = AutoLoopFakeState(brightness: 85)
         let controller = makeController(state: state)
         await controller.start()
-        controller.stop()
+        defer { controller.stop() }
+        try await waitUntil { controller.nextSyncAt != nil }
         await state.clearWrites()
+        await state.setHardwareBrightness(85)
         await state.setIgnoredWritesRemaining(2)
 
         controller.applyNow()
@@ -262,6 +316,8 @@ final class AutoLoopControllerTests: XCTestCase {
         let state = AutoLoopFakeState(monitors: [], brightness: 50)
         let controller = makeController(state: state)
         controller.displayRecoveryDelays = [.zero, .milliseconds(50)]
+        await controller.start()
+        defer { controller.stop() }
         await state.setMonitorBatches([[], [state.monitor]])
 
         controller.startDisplayRecovery(reason: "test")
@@ -272,12 +328,31 @@ final class AutoLoopControllerTests: XCTestCase {
         XCTAssertEqual(controller.activeMonitor?.uuid, "123")
     }
 
+    func testDisplayRecoveryRetriesWhenDDCIsEnumeratedButNotReady() async throws {
+        let state = AutoLoopFakeState()
+        let controller = makeController(state: state)
+        await controller.start()
+        defer { controller.stop() }
+        try await waitUntil { controller.nextSyncAt != nil }
+        await state.clearWrites()
+        await state.setFailedWritesRemaining(2)
+
+        controller.displayRecoveryDelays = [.zero, .milliseconds(25)]
+        controller.startDisplayRecovery(reason: "test")
+        try await waitUntil { controller.nextSyncAt != nil }
+        let writes = await state.writes
+        XCTAssertEqual(writes, [controller.targetBrightness])
+        XCTAssertTrue(controller.monitorConnected)
+    }
+
     func testDisplayRecoveryDoesNotWriteWhenAutoIsDisabled() async throws {
         let state = AutoLoopFakeState(brightness: 50)
         let controller = makeController(state: state)
         await controller.start()
-        controller.stop()
+        defer { controller.stop() }
+        try await waitUntil { controller.nextSyncAt != nil }
         controller.toggleAuto()
+        let originalReads = await state.luxReads
         controller.displayRecoveryDelays = [.zero]
         await state.clearWrites()
 
@@ -286,5 +361,7 @@ final class AutoLoopControllerTests: XCTestCase {
 
         let writes = await state.writes
         XCTAssertTrue(writes.isEmpty)
+        let reads = await state.luxReads
+        XCTAssertEqual(reads, originalReads)
     }
 }
